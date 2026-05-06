@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gcc-host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
+      - run: make all
+      - run: make test
+      - run: echo "banned-symbols stub (Phase 1)"
+      - run: ./tools/footprint_check.sh
+
+  clang-host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make CC=clang all
+      - run: make CC=clang test
+
+  arm-none-eabi-cross:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "arm-none-eabi cross-compile stub (Phase 1)"
+
+  format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "clang-format stub (Phase 1)"
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "clang-tidy stub (Phase 1)"
