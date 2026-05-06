@@ -1,20 +1,42 @@
-.PHONY: all test clean tiny format lint
+.PHONY: all test clean tiny format lint header-check
 
-all:
-	@echo "loxbudget: stub (Phase 1)"
+BUILD_DIR ?= build
+CC ?= cc
+AR ?= ar
 
-test:
-	@echo "loxbudget: no tests yet (Phase 1)"
+CFLAGS ?= -std=c99 -Wall -Wextra -Werror -Iinclude
+
+LOXBUDGET_OBJS := $(BUILD_DIR)/loxbudget.o $(BUILD_DIR)/loxbudget_hal.o
+
+all: $(BUILD_DIR)/libloxbudget.a header-check
+
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
+
+$(BUILD_DIR)/loxbudget.o: src/loxbudget.c include/loxbudget.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/loxbudget_hal.o: src/loxbudget_hal.c include/loxbudget.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/libloxbudget.a: $(LOXBUDGET_OBJS)
+	$(AR) rcs $@ $^
+
+$(BUILD_DIR)/test_header_compiles.o: tests/test_header_compiles.c include/loxbudget.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+header-check: $(BUILD_DIR)/test_header_compiles.o
+
+test: header-check
 
 clean:
-	@echo "loxbudget: clean (stub)"
+	@rm -rf $(BUILD_DIR)
 
 tiny:
-	@echo "loxbudget: tiny profile (stub)"
+	@echo "tiny profile build is implemented in Phase 7"
 
 format:
-	@echo "loxbudget: format (stub)"
+	@echo "format is implemented in Phase 7"
 
 lint:
-	@echo "loxbudget: lint (stub)"
-
+	@echo "lint is implemented in Phase 7"
