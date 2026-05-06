@@ -7,6 +7,14 @@
 
 #define LOXBUDGET_ALIGN_UP(v, a) (((v) + ((a)-1u)) & ~((a)-1u))
 
+typedef struct {
+  uint32_t magic2;
+  uint8_t res_cfg[LOXBUDGET_MAX_RESOURCES];
+  uint8_t op_cfg[LOXBUDGET_MAX_OPS];
+  uint8_t _pad[4];
+} loxbudget_storage_hdr_t;
+LOXBUDGET_STATIC_ASSERT(sizeof(loxbudget_storage_hdr_t) == 32, "storage header size");
+
 /* Internal storage structs. Sized to match SPEC.md required sizes. */
 typedef struct {
   uint16_t limit;
@@ -56,6 +64,13 @@ static loxbudget_lease_slot_t *loxbudget_lease_slots_(loxbudget_t *b) {
 }
 static const loxbudget_lease_slot_t *loxbudget_lease_slots_c_(const loxbudget_t *b) {
   return (const loxbudget_lease_slot_t *)(b->storage + b->lease_slots_off);
+}
+
+static loxbudget_storage_hdr_t *loxbudget_hdr_(loxbudget_t *b) {
+  return (loxbudget_storage_hdr_t *)b->storage;
+}
+static const loxbudget_storage_hdr_t *loxbudget_hdr_c_(const loxbudget_t *b) {
+  return (const loxbudget_storage_hdr_t *)b->storage;
 }
 
 static loxbudget_bool_t loxbudget_is_aligned_u32_(const void *p) {
@@ -162,8 +177,8 @@ loxbudget_status_t loxbudget_init(loxbudget_t *budget, void *storage,
     uint32_t off = 0u;
     const uint32_t align = 4u;
 
-    /* Header slack reserved by spec; we don't need to store it separately. */
-    off += 32u;
+    /* Storage header (fits into spec's 32-byte header reservation). */
+    off += (uint32_t)sizeof(loxbudget_storage_hdr_t);
     off = LOXBUDGET_ALIGN_UP(off, align);
 
     budget->resources_off = off;
@@ -197,6 +212,8 @@ loxbudget_status_t loxbudget_init(loxbudget_t *budget, void *storage,
   }
 
   /* Clear tables. */
+  memset(loxbudget_hdr_(budget), 0, sizeof(loxbudget_storage_hdr_t));
+  loxbudget_hdr_(budget)->magic2 = 0x4C584248u; /* 'LXBH' */
   memset(loxbudget_resources_(budget), 0,
          (size_t)budget->max_resources * sizeof(loxbudget_resource_t));
   memset(loxbudget_ops_(budget), 0,
@@ -287,29 +304,122 @@ loxbudget_status_t loxbudget_set_resource(loxbudget_t *budget,
                                          loxbudget_resource_id_t id,
                                          uint16_t limit,
                                          loxbudget_resource_kind_t kind) {
-  (void)budget;
-  (void)id;
-  (void)limit;
-  (void)kind;
-  return LOXBUDGET_ERR_FEATURE_DISABLED;
+  loxbudget_status_t st = loxbudget_validate_budget_(budget);
+  if (st != LOXBUDGET_OK) {
+    return st;
+  }
+  if (id >= budget->max_resources) {
+    return LOXBUDGET_ERR_INVALID_ARG;
+  }
+  if ((uint8_t)kind > (uint8_t)LOXBUDGET_RES_STATE) {
+    return LOXBUDGET_ERR_INVALID_ARG;
+  }
+
+  loxbudget_resource_t *r = &loxbudget_resources_(budget)[id];
+  r->limit = limit;
+  r->used = 0u;
+  r->reserved = 0u;
+  r->high_watermark = 0u;
+  r->kind = (uint8_t)kind;
+  r->flags = 1u; /* configured */
+  r->_pad = 0u;
+
+  loxbudget_hdr_(budget)->res_cfg[id] = 1u;
+  return LOXBUDGET_OK;
 }
 
 loxbudget_status_t loxbudget_register_op(loxbudget_t *budget,
                                         const loxbudget_op_profile_t *profile) {
-  (void)budget;
-  (void)profile;
-  return LOXBUDGET_ERR_FEATURE_DISABLED;
+  loxbudget_status_t st = loxbudget_validate_budget_(budget);
+  if (st != LOXBUDGET_OK || profile == NULL) {
+    return (profile == NULL) ? LOXBUDGET_ERR_INVALID_ARG : st;
+  }
+  if (profile->op_id >= budget->max_ops) {
+    return LOXBUDGET_ERR_INVALID_ARG;
+  }
+  if (profile->priority > (uint8_t)LOXBUDGET_PRIO_CRITICAL) {
+    return LOXBUDGET_ERR_INVALID_ARG;
+  }
+  if (profile->action_normal > (uint8_t)LOXBUDGET_LOCKDOWN ||
+      profile->action_elevated > (uint8_t)LOXBUDGET_LOCKDOWN ||
+      profile->action_critical > (uint8_t)LOXBUDGET_LOCKDOWN ||
+      profile->action_survival > (uint8_t)LOXBUDGET_LOCKDOWN ||
+      profile->action_lockdown > (uint8_t)LOXBUDGET_LOCKDOWN) {
+    return LOXBUDGET_ERR_INVALID_ARG;
+  }
+
+  if (loxbudget_hdr_(budget)->op_cfg[profile->op_id] != 0u) {
+    return LOXBUDGET_ERR_DUPLICATE;
+  }
+
+  if (budget->hal_strict != 0u) {
+    const uint8_t f = profile->flags;
+    if ((f & LOXBUDGET_OPF_REQUIRES_BOOT_PROVEN) != 0u) {
+      if (budget->hal_cb == NULL || budget->hal_cb->boot_proven == NULL) {
+        return LOXBUDGET_ERR_HAL_NOT_CONFIGURED;
+      }
+    }
+    if ((f & LOXBUDGET_OPF_REQUIRES_VOLTAGE_OK) != 0u) {
+      if (budget->hal_cb == NULL || budget->hal_cb->voltage_ok == NULL) {
+        return LOXBUDGET_ERR_HAL_NOT_CONFIGURED;
+      }
+    }
+    if ((f & LOXBUDGET_OPF_REQUIRES_NETWORK_UP) != 0u) {
+      if (budget->hal_cb == NULL || budget->hal_cb->network_up == NULL) {
+        return LOXBUDGET_ERR_HAL_NOT_CONFIGURED;
+      }
+    }
+  }
+
+  loxbudget_ops_(budget)[profile->op_id] = *profile;
+  loxbudget_hdr_(budget)->op_cfg[profile->op_id] = 1u;
+
+  /* Clear needs list for this op. */
+  memset(&loxbudget_needs_(budget)[(uint32_t)profile->op_id * LOXBUDGET_MAX_NEEDS_PER_OP], 0,
+         (size_t)LOXBUDGET_MAX_NEEDS_PER_OP * sizeof(loxbudget_need_t));
+
+  return LOXBUDGET_OK;
 }
 
 loxbudget_status_t loxbudget_op_set_need(loxbudget_t *budget,
                                         loxbudget_op_id_t op,
                                         loxbudget_resource_id_t resource,
                                         uint16_t amount) {
-  (void)budget;
-  (void)op;
-  (void)resource;
-  (void)amount;
-  return LOXBUDGET_ERR_FEATURE_DISABLED;
+  loxbudget_status_t st = loxbudget_validate_budget_(budget);
+  if (st != LOXBUDGET_OK) {
+    return st;
+  }
+  if (op >= budget->max_ops || resource >= budget->max_resources) {
+    return LOXBUDGET_ERR_INVALID_ARG;
+  }
+  if (amount == 0u) {
+    return LOXBUDGET_ERR_INVALID_ARG;
+  }
+  if (loxbudget_hdr_(budget)->op_cfg[op] == 0u) {
+    return LOXBUDGET_ERR_NOT_FOUND;
+  }
+  if (loxbudget_hdr_(budget)->res_cfg[resource] == 0u) {
+    return LOXBUDGET_ERR_NOT_FOUND;
+  }
+
+  loxbudget_need_t *list =
+      &loxbudget_needs_(budget)[(uint32_t)op * LOXBUDGET_MAX_NEEDS_PER_OP];
+  uint8_t i;
+  for (i = 0u; i < LOXBUDGET_MAX_NEEDS_PER_OP; i++) {
+    if (list[i].amount != 0u && list[i].resource == resource) {
+      list[i].amount = amount;
+      return LOXBUDGET_OK;
+    }
+  }
+  for (i = 0u; i < LOXBUDGET_MAX_NEEDS_PER_OP; i++) {
+    if (list[i].amount == 0u) {
+      list[i].resource = resource;
+      list[i].amount = amount;
+      list[i]._pad = 0u;
+      return LOXBUDGET_OK;
+    }
+  }
+  return LOXBUDGET_ERR_NO_SPACE;
 }
 
 loxbudget_status_t loxbudget_check(loxbudget_t *budget, loxbudget_op_id_t op,
