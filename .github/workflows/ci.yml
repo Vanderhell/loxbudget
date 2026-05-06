@@ -14,7 +14,7 @@ jobs:
       - run: make test
       - run: cmake -S . -B build_cmake && cmake --build build_cmake
       - run: ./build_cmake/test_microlog_adapter
-      - run: make example
+      - run: make examples
       - run: wc -l < examples/01_bare_metal_minimal/main.c | awk '$1 > 50 { exit 1 }'
       - run: ./tools/footprint_check.sh
 
