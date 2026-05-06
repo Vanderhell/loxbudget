@@ -1,4 +1,4 @@
-#include "loxbudget.h"
+#include "loxbudget.h" /* core */
 
 #include <string.h>
 
