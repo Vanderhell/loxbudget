@@ -547,6 +547,39 @@ static void test_max_concurrent_leases(void) {
   assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
 }
 
+#if LOXBUDGET_ENABLE_AUDIT_TRAIL
+static void test_audit_basic(void) {
+  loxbudget_t b;
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 8) / 4u];
+  loxbudget_op_profile_t p = profile_allow_(0);
+  loxbudget_decision_t d;
+  loxbudget_decision_record_t rec[8];
+  size_t n = 0;
+
+  cfg.audit_size = 8;
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_set_resource(&b, 0, 10, LOXBUDGET_RES_REUSABLE) == LOXBUDGET_OK);
+  assert(loxbudget_register_op(&b, &p) == LOXBUDGET_OK);
+  assert(loxbudget_op_set_need(&b, 0, 0, 1) == LOXBUDGET_OK);
+
+  assert(loxbudget_check(&b, 0, &d) == LOXBUDGET_OK);
+  assert(loxbudget_check(&b, 0, &d) == LOXBUDGET_OK);
+  assert(loxbudget_check(&b, 0, &d) == LOXBUDGET_OK);
+
+  assert(loxbudget_audit_get_recent(&b, rec, 8, &n) == LOXBUDGET_OK);
+  assert(n == 3u);
+  assert(rec[0].op_id == 0);
+  assert(rec[0].action == (uint8_t)LOXBUDGET_ALLOW_FULL);
+
+  assert(loxbudget_audit_clear(&b) == LOXBUDGET_OK);
+  assert(loxbudget_audit_get_recent(&b, rec, 8, &n) == LOXBUDGET_OK);
+  assert(n == 0u);
+
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+#endif
+
 int main(void) {
   test_init_invalid_args();
   test_init_valid();
@@ -571,5 +604,8 @@ int main(void) {
   test_double_leave_detected();
   test_lease_magic_per_instance();
   test_max_concurrent_leases();
+#if LOXBUDGET_ENABLE_AUDIT_TRAIL
+  test_audit_basic();
+#endif
   return 0;
 }

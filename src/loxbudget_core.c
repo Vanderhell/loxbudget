@@ -66,6 +66,13 @@ static const loxbudget_lease_slot_t* loxbudget_lease_slots_c_(const loxbudget_t*
   return (const loxbudget_lease_slot_t*)(b->storage + b->lease_slots_off);
 }
 
+static loxbudget_decision_record_t* loxbudget_audit_buf_(loxbudget_t* b) {
+  return (loxbudget_decision_record_t*)(b->storage + b->audit_off);
+}
+static const loxbudget_decision_record_t* loxbudget_audit_buf_c_(const loxbudget_t* b) {
+  return (const loxbudget_decision_record_t*)(b->storage + b->audit_off);
+}
+
 static loxbudget_storage_hdr_t* loxbudget_hdr_(loxbudget_t* b) {
   return (loxbudget_storage_hdr_t*)b->storage;
 }
@@ -192,6 +199,35 @@ static void loxbudget_critical_exit_(const loxbudget_t* budget) {
   loxbudget_hal_critical_exit();
 }
 
+static void loxbudget_audit_record_(loxbudget_t* b, loxbudget_op_id_t op,
+                                    const loxbudget_decision_t* d) {
+#if LOXBUDGET_ENABLE_AUDIT_TRAIL
+  if (b->audit_size == 0u) { return; }
+  loxbudget_critical_enter_(b);
+  {
+    loxbudget_decision_record_t* ring = loxbudget_audit_buf_(b);
+    const uint8_t idx = b->audit_head;
+    ring[idx].timestamp_ms = loxbudget_hal_now_ms_(b);
+    ring[idx].op_id = op;
+    ring[idx].denied_resource = d->denied_resource;
+    ring[idx].requested = d->requested;
+    ring[idx].available = d->available;
+    ring[idx].action = (uint8_t)d->action;
+    ring[idx].pressure = (uint8_t)d->pressure;
+    ring[idx].reason = (uint8_t)d->reason;
+    ring[idx]._pad = 0u;
+
+    b->audit_head = (uint8_t)((idx + 1u) & (uint8_t)(b->audit_size - 1u));
+    if (b->audit_count < b->audit_size) { b->audit_count++; }
+  }
+  loxbudget_critical_exit_(b);
+#else
+  (void)b;
+  (void)op;
+  (void)d;
+#endif
+}
+
 loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t storage_size,
                                   const loxbudget_config_t* cfg) {
   loxbudget_status_t st = loxbudget_validate_init_args_(budget, storage, storage_size, cfg);
@@ -210,6 +246,9 @@ loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t sto
   budget->hal_cb = cfg->hal_callbacks;
   budget->hal_user = cfg->hal_user;
   budget->hal_strict = cfg->hal_strict ? LOXBUDGET_TRUE : LOXBUDGET_FALSE;
+  budget->audit_size = cfg->audit_size;
+  budget->audit_head = 0u;
+  budget->audit_count = 0u;
 
   /* Compute table layout within user storage. */
   {
@@ -237,7 +276,8 @@ loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t sto
     off += (uint32_t)budget->max_leases * (uint32_t)sizeof(loxbudget_lease_slot_t);
     off = LOXBUDGET_ALIGN_UP(off, align);
 
-    /* No audit in V0.1; still reserve size if user asked via cfg->audit_size. */
+    /* Audit ring. */
+    budget->audit_off = off;
     off += (uint32_t)cfg->audit_size * (uint32_t)sizeof(loxbudget_decision_record_t);
     off = LOXBUDGET_ALIGN_UP(off, align);
 
@@ -260,6 +300,10 @@ loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t sto
          (size_t)budget->max_ops * LOXBUDGET_MAX_NEEDS_PER_OP * sizeof(loxbudget_need_t));
   memset(loxbudget_lease_slots_(budget), 0,
          (size_t)budget->max_leases * sizeof(loxbudget_lease_slot_t));
+  if (budget->audit_size != 0u) {
+    memset(loxbudget_audit_buf_(budget), 0,
+           (size_t)budget->audit_size * sizeof(loxbudget_decision_record_t));
+  }
 
   /* Initialize per-instance lease magic base. */
   {
@@ -428,14 +472,15 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
 
   memset(out, 0, sizeof(*out));
   out->pressure = (loxbudget_pressure_t)budget->pressure;
+  out->denied_resource = 0xFFu;
 
   const loxbudget_op_profile_t* p = loxbudget_profile_c_(budget, op);
   if (p == NULL) {
     out->action = LOXBUDGET_REJECT;
     out->reason = (uint8_t)LOXBUDGET_REASON_UNKNOWN_OP;
-    out->denied_resource = 0xFFu;
     budget->total_decisions++;
     budget->total_denials++;
+    loxbudget_audit_record_(budget, op, out);
     return LOXBUDGET_OK;
   }
 
@@ -450,6 +495,7 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
       out->reason = (uint8_t)LOXBUDGET_REASON_LOCKDOWN_ACTIVE;
       budget->total_decisions++;
       budget->total_denials++;
+      loxbudget_audit_record_(budget, op, out);
       return LOXBUDGET_OK;
     }
   }
@@ -460,6 +506,7 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
                                                       : (uint8_t)LOXBUDGET_REASON_PRESSURE_BLOCK;
     budget->total_decisions++;
     budget->total_denials++;
+    loxbudget_audit_record_(budget, op, out);
     return LOXBUDGET_OK;
   }
 
@@ -471,6 +518,7 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
       out->reason = (uint8_t)LOXBUDGET_REASON_HAL_NOT_CONFIGURED;
       budget->total_decisions++;
       budget->total_denials++;
+      loxbudget_audit_record_(budget, op, out);
       return LOXBUDGET_OK;
     }
     if (v == LOXBUDGET_FALSE) {
@@ -478,6 +526,7 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
       out->reason = (uint8_t)LOXBUDGET_REASON_PRECONDITION_FAIL;
       budget->total_decisions++;
       budget->total_denials++;
+      loxbudget_audit_record_(budget, op, out);
       return LOXBUDGET_OK;
     }
   }
@@ -488,6 +537,7 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
       out->reason = (uint8_t)LOXBUDGET_REASON_HAL_NOT_CONFIGURED;
       budget->total_decisions++;
       budget->total_denials++;
+      loxbudget_audit_record_(budget, op, out);
       return LOXBUDGET_OK;
     }
     if (v == LOXBUDGET_FALSE) {
@@ -533,6 +583,7 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
         out->available = 0u;
         budget->total_decisions++;
         budget->total_denials++;
+        loxbudget_audit_record_(budget, op, out);
         return LOXBUDGET_OK;
       }
 
@@ -546,6 +597,7 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
           out->available = 0u;
           budget->total_decisions++;
           budget->total_denials++;
+          loxbudget_audit_record_(budget, op, out);
           return LOXBUDGET_OK;
         }
         continue;
@@ -566,6 +618,7 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
 
         budget->total_decisions++;
         budget->total_denials++;
+        loxbudget_audit_record_(budget, op, out);
         return LOXBUDGET_OK;
       }
     }
@@ -579,6 +632,7 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
   } else {
     budget->total_grants++;
   }
+  loxbudget_audit_record_(budget, op, out);
   return LOXBUDGET_OK;
 }
 

@@ -247,6 +247,11 @@ typedef struct {
   uint32_t ops_off;
   uint32_t needs_off;
   uint32_t lease_slots_off;
+  uint32_t audit_off;
+  uint8_t audit_size;
+  uint8_t audit_head;
+  uint8_t audit_count;
+  uint8_t _pad2;
   const loxbudget_hal_callbacks_t* hal_cb;
   void* hal_user;
   loxbudget_bool_t hal_strict;
@@ -297,6 +302,13 @@ loxbudget_pressure_t loxbudget_get_pressure(const loxbudget_t* budget);
 
 /* Get a read-only snapshot of instance counters and state. */
 loxbudget_status_t loxbudget_snapshot(const loxbudget_t* budget, loxbudget_snapshot_t* out);
+
+#if LOXBUDGET_ENABLE_AUDIT_TRAIL
+loxbudget_status_t loxbudget_audit_get_recent(const loxbudget_t* budget,
+                                              loxbudget_decision_record_t* out, size_t max_records,
+                                              size_t* out_count);
+loxbudget_status_t loxbudget_audit_clear(loxbudget_t* budget);
+#endif
 
 /* HAL API (weak symbols provided in src/loxbudget_hal.c, overridable via callbacks). */
 /* Time since boot in milliseconds (monotonic). */
