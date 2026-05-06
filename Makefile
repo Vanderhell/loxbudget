@@ -53,7 +53,9 @@ lint:
 	@echo "lint is implemented in Phase 7"
 
 example:
-	@echo "example is implemented in Phase 8"
+	@chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh || true
+	@$(CC) $(CFLAGS) -Iinclude examples/01_bare_metal_minimal/main.c $(BUILD_DIR)/libloxbudget.a -o $(BUILD_DIR)/example_minimal
+	@$(BUILD_DIR)/example_minimal
 
 cross: | $(BUILD_DIR)
 	@arm-none-eabi-gcc --version >/dev/null

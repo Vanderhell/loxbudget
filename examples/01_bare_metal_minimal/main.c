@@ -1,10 +1,3 @@
-# loxbudget
-
-Tiny no-heap C99 library for embedded firmware: pre-flight checks for embedded operations.
-
-## Quick start
-
-```c
 #include "loxbudget.h"
 
 int main(void) {
@@ -30,6 +23,4 @@ int main(void) {
   (void)loxbudget_check(&b, 0, &d);
   return (d.action == LOXBUDGET_ALLOW_FULL) ? 0 : 1;
 }
-```
 
-This initializes a budget instance into caller-provided storage, declares one reusable resource, registers an operation profile, and asks the library for a deterministic decision before running the operation.
