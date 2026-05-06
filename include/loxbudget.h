@@ -68,6 +68,10 @@ extern "C" {
 #define LOXBUDGET_AUDIT_SIZE 0
 #endif
 
+#ifndef LOXBUDGET_CALIB_STATE_SIZE
+#define LOXBUDGET_CALIB_STATE_SIZE 640u
+#endif
+
 /* V0.3 rate implementation selection (default fixed-window). */
 #define LOXBUDGET_RATE_IMPL_FIXED_WINDOW 1
 #define LOXBUDGET_RATE_IMPL_TOKEN_BUCKET 2
@@ -318,7 +322,8 @@ typedef struct {
    (uint32_t)(n_ops) * (uint32_t)LOXBUDGET_MAX_NEEDS_PER_OP * 4u +                                 \
    (uint32_t)LOXBUDGET_MAX_LEASES * 8u +                                                           \
    ((LOXBUDGET_ENABLE_RATE_WINDOWS != 0) ? ((uint32_t)(n_res) * 72u) : 0u) +                       \
-   ((LOXBUDGET_ENABLE_CALIBRATION != 0) ? 256u : 0u) + (uint32_t)(audit_n) * 16u + 16u)
+   ((LOXBUDGET_ENABLE_CALIBRATION != 0) ? ((uint32_t)(n_ops) * LOXBUDGET_CALIB_STATE_SIZE) : 0u) + \
+   (uint32_t)(audit_n) * 16u + 16u)
 
 /* Core API (V0.1). */
 /* Initialize a budget instance in caller-provided storage. Storage must be uint32_t-aligned. */

@@ -30,14 +30,20 @@ typedef struct {
   uint32_t dur_max_us;
 } lb__calib_state_t;
 
-LOXBUDGET_STATIC_ASSERT(sizeof(lb__calib_state_t) <= 256, "calib state must fit storage slot");
+typedef struct {
+  lb__calib_state_t s;
+  uint8_t _pad[LOXBUDGET_CALIB_STATE_SIZE - (uint32_t)sizeof(lb__calib_state_t)];
+} lb__calib_state_slot_t;
 
-static lb__calib_state_t* lb__calib_state_(loxbudget_t* b) {
-  return (lb__calib_state_t*)(b->storage + b->calib_off);
+LOXBUDGET_STATIC_ASSERT(sizeof(lb__calib_state_slot_t) == LOXBUDGET_CALIB_STATE_SIZE,
+                        "calib slot size");
+
+static lb__calib_state_slot_t* lb__calib_slots_(loxbudget_t* b) {
+  return (lb__calib_state_slot_t*)(b->storage + b->calib_off);
 }
 
-static const lb__calib_state_t* lb__calib_state_c_(const loxbudget_t* b) {
-  return (const lb__calib_state_t*)(b->storage + b->calib_off);
+static const lb__calib_state_slot_t* lb__calib_slots_c_(const loxbudget_t* b) {
+  return (const lb__calib_state_slot_t*)(b->storage + b->calib_off);
 }
 
 static loxbudget_status_t lb__validate_budget_(const loxbudget_t* b) {
@@ -208,9 +214,13 @@ loxbudget_status_t loxbudget_calibrate_begin(loxbudget_t* budget, loxbudget_op_i
   if (st != LOXBUDGET_OK) return st;
   if (target_samples == 0u) return LOXBUDGET_ERR_INVALID_ARG;
   if (budget->calib_off == 0u) return LOXBUDGET_ERR_NO_SPACE;
+  if (op >= budget->max_ops) return LOXBUDGET_ERR_INVALID_ARG;
 
-  lb__calib_state_t* s = lb__calib_state_(budget);
-  memset(s, 0, sizeof(*s));
+  lb__calib_state_slot_t* slot = &lb__calib_slots_(budget)[op];
+  lb__calib_state_t* s = &slot->s;
+  if (s->active != 0u) return LOXBUDGET_ERR_BAD_STATE;
+
+  memset(slot, 0, sizeof(*slot));
   s->active = 1u;
   s->op_id = op;
   s->target_samples = target_samples;
@@ -229,7 +239,8 @@ loxbudget_status_t loxbudget_calibrate_sample(loxbudget_t* budget, loxbudget_op_
     return (sample == NULL) ? LOXBUDGET_ERR_INVALID_ARG : st;
   }
   if (budget->calib_off == 0u) return LOXBUDGET_ERR_NO_SPACE;
-  lb__calib_state_t* s = lb__calib_state_(budget);
+  if (op >= budget->max_ops) return LOXBUDGET_ERR_INVALID_ARG;
+  lb__calib_state_t* s = &lb__calib_slots_(budget)[op].s;
   if (s->active == 0u || s->op_id != op) return LOXBUDGET_ERR_BAD_STATE;
 
   s->sample_count++;
@@ -239,6 +250,17 @@ loxbudget_status_t loxbudget_calibrate_sample(loxbudget_t* budget, loxbudget_op_
   lb__p2_add_sample_(&s->ram_p50, 0x8000u, (uint32_t)sample->ram_used);
   lb__p2_add_sample_(&s->ram_p95, 0xF333u, (uint32_t)sample->ram_used);
   lb__p2_add_sample_(&s->ram_p99, 0xFD70u, (uint32_t)sample->ram_used);
+
+  if (s->sample_count == 500u) {
+    s->outlier_count = 0u;
+    /* reuse outlier_count slot to store max@500? keep simple */
+  }
+
+  /* outlier detection: sample > p99 * 1.5 */
+  {
+    const uint32_t p99 = lb__p2_get_q_q16_(&s->ram_p99);
+    if (((uint64_t)sample->ram_used << 16) > (uint64_t)p99 + (p99 >> 1)) { s->outlier_count++; }
+  }
 
   /* Duration estimator expects <= 65535 range; saturate for V1.0 minimal impl. */
   const uint32_t dur_sat = (sample->duration_us > 65535u) ? 65535u : sample->duration_us;
@@ -253,7 +275,8 @@ loxbudget_status_t loxbudget_calibrate_end(loxbudget_t* budget, loxbudget_op_id_
   loxbudget_status_t st = lb__validate_budget_(budget);
   if (st != LOXBUDGET_OK || out == NULL) { return (out == NULL) ? LOXBUDGET_ERR_INVALID_ARG : st; }
   if (budget->calib_off == 0u) return LOXBUDGET_ERR_NO_SPACE;
-  lb__calib_state_t* s = lb__calib_state_(budget);
+  if (op >= budget->max_ops) return LOXBUDGET_ERR_INVALID_ARG;
+  lb__calib_state_t* s = &lb__calib_slots_(budget)[op].s;
   if (s->active == 0u || s->op_id != op) return LOXBUDGET_ERR_BAD_STATE;
 
   memset(out, 0, sizeof(*out));

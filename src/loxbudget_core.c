@@ -330,7 +330,7 @@ loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t sto
 
 #if LOXBUDGET_ENABLE_CALIBRATION
     budget->calib_off = off;
-    off += 256u; /* single active calibration state (fixed size) */
+    off += (uint32_t)budget->max_ops * (uint32_t)LOXBUDGET_CALIB_STATE_SIZE;
     off = LOXBUDGET_ALIGN_UP(off, align);
 #endif
 
