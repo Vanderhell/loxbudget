@@ -1,0 +1,4 @@
+tiny:
+  text_max: 4096
+  bss_max: 0
+
