@@ -16,6 +16,10 @@ static loxbudget_config_t cfg_default_(void) {
   return cfg;
 }
 
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+static uint32_t test_now_ms_(void* user) { return *(uint32_t*)user; }
+#endif
+
 static void test_init_invalid_args(void) {
   loxbudget_t b;
   loxbudget_config_t cfg = cfg_default_();
@@ -547,6 +551,71 @@ static void test_max_concurrent_leases(void) {
   assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
 }
 
+static void test_yield_check_holding_and_rising(void) {
+  loxbudget_t b;
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
+  loxbudget_op_profile_t p = profile_allow_(0);
+  loxbudget_lease_t lease;
+  loxbudget_pressure_hint_t hint;
+
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_set_resource(&b, 0, 10, LOXBUDGET_RES_REUSABLE) == LOXBUDGET_OK);
+  assert(loxbudget_register_op(&b, &p) == LOXBUDGET_OK);
+  assert(loxbudget_op_set_need(&b, 0, 0, 1) == LOXBUDGET_OK);
+
+  assert(loxbudget_set_pressure(&b, LOXBUDGET_PRESSURE_NORMAL) == LOXBUDGET_OK);
+  assert(loxbudget_enter(&b, 0, &lease) == LOXBUDGET_OK);
+  assert(loxbudget_yield_check(&b, lease, &hint) == LOXBUDGET_OK);
+  assert(hint == LOXBUDGET_PRESSURE_HOLDING);
+
+  assert(loxbudget_set_pressure(&b, LOXBUDGET_PRESSURE_ELEVATED) == LOXBUDGET_OK);
+  assert(loxbudget_yield_check(&b, lease, &hint) == LOXBUDGET_OK);
+  assert(hint == LOXBUDGET_PRESSURE_RISING);
+
+  assert(loxbudget_leave(&b, lease) == LOXBUDGET_OK);
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+
+static void test_yield_check_should_abort(void) {
+  loxbudget_t b;
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
+  loxbudget_op_profile_t p = profile_allow_(0);
+  loxbudget_lease_t lease;
+  loxbudget_pressure_hint_t hint;
+
+  p.action_survival = LOXBUDGET_REJECT;
+
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_set_resource(&b, 0, 10, LOXBUDGET_RES_REUSABLE) == LOXBUDGET_OK);
+  assert(loxbudget_register_op(&b, &p) == LOXBUDGET_OK);
+  assert(loxbudget_op_set_need(&b, 0, 0, 1) == LOXBUDGET_OK);
+
+  assert(loxbudget_set_pressure(&b, LOXBUDGET_PRESSURE_NORMAL) == LOXBUDGET_OK);
+  assert(loxbudget_enter(&b, 0, &lease) == LOXBUDGET_OK);
+  assert(loxbudget_set_pressure(&b, LOXBUDGET_PRESSURE_SURVIVAL) == LOXBUDGET_OK);
+  assert(loxbudget_yield_check(&b, lease, &hint) == LOXBUDGET_OK);
+  assert(hint == LOXBUDGET_SHOULD_ABORT);
+
+  assert(loxbudget_leave(&b, lease) == LOXBUDGET_OK);
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+
+static void test_yield_check_invalid_lease(void) {
+  loxbudget_t b;
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
+  loxbudget_lease_t lease;
+  loxbudget_pressure_hint_t hint;
+
+  memset(&lease, 0, sizeof(lease));
+
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_yield_check(&b, lease, &hint) != LOXBUDGET_OK);
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+
 #if LOXBUDGET_ENABLE_AUDIT_TRAIL
 static void test_audit_basic(void) {
   loxbudget_t b;
@@ -598,6 +667,131 @@ static void test_strings_enabled(void) {
 #endif
 }
 
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+static void test_set_rate_limit_basic(void) {
+  loxbudget_t b;
+  uint32_t t = 0;
+  loxbudget_hal_callbacks_t hal = *loxbudget_hal_default_permissive();
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
+
+  hal.now_ms = &test_now_ms_;
+  cfg.hal_callbacks = &hal;
+  cfg.hal_user = &t;
+
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_set_resource(&b, 0, 100, LOXBUDGET_RES_CONSUMABLE) == LOXBUDGET_OK);
+  assert(loxbudget_set_rate_limit(&b, 0, LOXBUDGET_WINDOW_MINUTE, 60) == LOXBUDGET_OK);
+  assert(loxbudget_set_lifetime_limit(&b, 0, 1000) == LOXBUDGET_OK);
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+
+static void test_set_rate_limit_reusable_rejected(void) {
+  loxbudget_t b;
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
+
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_set_resource(&b, 0, 100, LOXBUDGET_RES_REUSABLE) == LOXBUDGET_OK);
+  assert(loxbudget_set_rate_limit(&b, 0, LOXBUDGET_WINDOW_MINUTE, 60) == LOXBUDGET_ERR_INVALID_ARG);
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+
+static void test_rate_limit_basic_and_rollover(void) {
+  loxbudget_t b;
+  uint32_t t = 0;
+  loxbudget_hal_callbacks_t hal = *loxbudget_hal_default_permissive();
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
+  loxbudget_op_profile_t p = profile_allow_(0);
+  loxbudget_lease_t lease;
+
+  hal.now_ms = &test_now_ms_;
+  cfg.hal_callbacks = &hal;
+  cfg.hal_user = &t;
+
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_set_resource(&b, 0, 100, LOXBUDGET_RES_CONSUMABLE) == LOXBUDGET_OK);
+  assert(loxbudget_set_rate_limit(&b, 0, LOXBUDGET_WINDOW_MINUTE, 2) == LOXBUDGET_OK);
+  assert(loxbudget_register_op(&b, &p) == LOXBUDGET_OK);
+  assert(loxbudget_op_set_need(&b, 0, 0, 1) == LOXBUDGET_OK);
+
+  assert(loxbudget_enter(&b, 0, &lease) == LOXBUDGET_OK);
+  assert(loxbudget_leave(&b, lease) == LOXBUDGET_OK);
+  assert(loxbudget_enter(&b, 0, &lease) == LOXBUDGET_OK);
+  assert(loxbudget_leave(&b, lease) == LOXBUDGET_OK);
+  assert(loxbudget_enter(&b, 0, &lease) == LOXBUDGET_ERR_BAD_STATE);
+
+  /* Rollover after 60s. */
+  t = 60000u;
+  assert(loxbudget_enter(&b, 0, &lease) == LOXBUDGET_OK);
+  assert(loxbudget_leave(&b, lease) == LOXBUDGET_OK);
+
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+
+static void test_lifetime_limit_basic(void) {
+  loxbudget_t b;
+  uint32_t t = 0;
+  loxbudget_hal_callbacks_t hal = *loxbudget_hal_default_permissive();
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
+  loxbudget_op_profile_t p = profile_allow_(0);
+  loxbudget_lease_t lease;
+
+  hal.now_ms = &test_now_ms_;
+  cfg.hal_callbacks = &hal;
+  cfg.hal_user = &t;
+
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_set_resource(&b, 0, 100, LOXBUDGET_RES_CONSUMABLE) == LOXBUDGET_OK);
+  assert(loxbudget_set_lifetime_limit(&b, 0, 2) == LOXBUDGET_OK);
+  assert(loxbudget_register_op(&b, &p) == LOXBUDGET_OK);
+  assert(loxbudget_op_set_need(&b, 0, 0, 1) == LOXBUDGET_OK);
+
+  assert(loxbudget_enter(&b, 0, &lease) == LOXBUDGET_OK);
+  assert(loxbudget_leave(&b, lease) == LOXBUDGET_OK);
+  assert(loxbudget_enter(&b, 0, &lease) == LOXBUDGET_OK);
+  assert(loxbudget_leave(&b, lease) == LOXBUDGET_OK);
+  assert(loxbudget_enter(&b, 0, &lease) == LOXBUDGET_ERR_BAD_STATE);
+
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+
+static void test_burn_rate_basic(void) {
+  loxbudget_t b;
+  uint32_t t = 0;
+  loxbudget_hal_callbacks_t hal = *loxbudget_hal_default_permissive();
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
+  loxbudget_op_profile_t p = profile_allow_(0);
+  loxbudget_lease_t lease;
+  loxbudget_burn_rate_t br;
+
+  hal.now_ms = &test_now_ms_;
+  cfg.hal_callbacks = &hal;
+  cfg.hal_user = &t;
+
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_set_resource(&b, 0, 100, LOXBUDGET_RES_CONSUMABLE) == LOXBUDGET_OK);
+  assert(loxbudget_set_rate_limit(&b, 0, LOXBUDGET_WINDOW_MINUTE, 60) == LOXBUDGET_OK);
+  assert(loxbudget_set_lifetime_limit(&b, 0, 1000) == LOXBUDGET_OK);
+  assert(loxbudget_register_op(&b, &p) == LOXBUDGET_OK);
+  assert(loxbudget_op_set_need(&b, 0, 0, 10) == LOXBUDGET_OK);
+
+  assert(loxbudget_enter(&b, 0, &lease) == LOXBUDGET_OK);
+  assert(loxbudget_leave(&b, lease) == LOXBUDGET_OK);
+  assert(loxbudget_get_burn_rate(&b, 0, &br) == LOXBUDGET_OK);
+#if LOXBUDGET_RATE_IMPL == LOXBUDGET_RATE_IMPL_FIXED_WINDOW
+  assert(br.per_minute == 10u);
+#else
+  assert(br.per_minute == 0u);
+#endif
+
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+#endif
+
 int main(void) {
   test_init_invalid_args();
   test_init_valid();
@@ -627,5 +821,15 @@ int main(void) {
 #endif
   test_strings_disabled();
   test_strings_enabled();
+  test_yield_check_holding_and_rising();
+  test_yield_check_should_abort();
+  test_yield_check_invalid_lease();
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+  test_set_rate_limit_basic();
+  test_set_rate_limit_reusable_rejected();
+  test_rate_limit_basic_and_rollover();
+  test_lifetime_limit_basic();
+  test_burn_rate_basic();
+#endif
   return 0;
 }

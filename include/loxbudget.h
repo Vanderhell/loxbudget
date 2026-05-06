@@ -68,6 +68,13 @@ extern "C" {
 #define LOXBUDGET_AUDIT_SIZE 0
 #endif
 
+/* V0.3 rate implementation selection (default fixed-window). */
+#define LOXBUDGET_RATE_IMPL_FIXED_WINDOW 1
+#define LOXBUDGET_RATE_IMPL_TOKEN_BUCKET 2
+#ifndef LOXBUDGET_RATE_IMPL
+#define LOXBUDGET_RATE_IMPL LOXBUDGET_RATE_IMPL_FIXED_WINDOW
+#endif
+
 /* Boolean type (no <stdbool.h>). */
 typedef uint8_t loxbudget_bool_t;
 #define LOXBUDGET_TRUE 1u
@@ -114,6 +121,14 @@ typedef enum {
   LOXBUDGET_RES_CONSUMABLE = 1,
   LOXBUDGET_RES_STATE = 2
 } loxbudget_resource_kind_t;
+
+typedef enum {
+  LOXBUDGET_WINDOW_SECOND = 0,
+  LOXBUDGET_WINDOW_MINUTE = 1,
+  LOXBUDGET_WINDOW_HOUR = 2,
+  LOXBUDGET_WINDOW_DAY = 3,
+  LOXBUDGET_WINDOW_LIFETIME = 4
+} loxbudget_window_t;
 
 typedef enum {
   LOXBUDGET_PRIO_LOW = 0,
@@ -208,6 +223,19 @@ typedef struct {
   uint32_t uptime_ms;
 } loxbudget_snapshot_t;
 
+typedef struct {
+  uint32_t per_minute;
+  uint32_t per_hour;
+  uint32_t estimated_exhaustion_ms;
+} loxbudget_burn_rate_t;
+
+typedef enum {
+  LOXBUDGET_PRESSURE_HOLDING = 0,
+  LOXBUDGET_PRESSURE_RISING = 1,
+  LOXBUDGET_PRESSURE_FALLING = 2,
+  LOXBUDGET_SHOULD_ABORT = 3
+} loxbudget_pressure_hint_t;
+
 typedef struct loxbudget_hal_callbacks_t {
   uint32_t (*now_ms)(void* user);
   void (*critical_enter)(void* user);
@@ -248,6 +276,7 @@ typedef struct {
   uint32_t needs_off;
   uint32_t lease_slots_off;
   uint32_t audit_off;
+  uint32_t rate_off;
   uint8_t audit_size;
   uint8_t audit_head;
   uint8_t audit_count;
@@ -264,7 +293,9 @@ typedef struct {
 #define LOXBUDGET_REQUIRED_SIZE(n_res, n_ops, audit_n)                                             \
   (32u + (uint32_t)(n_res) * 12u + (uint32_t)(n_ops) * 8u +                                        \
    (uint32_t)(n_ops) * (uint32_t)LOXBUDGET_MAX_NEEDS_PER_OP * 4u +                                 \
-   (uint32_t)LOXBUDGET_MAX_LEASES * 8u + (uint32_t)(audit_n) * 16u + 16u)
+   (uint32_t)LOXBUDGET_MAX_LEASES * 8u +                                                           \
+   ((LOXBUDGET_ENABLE_RATE_WINDOWS != 0) ? ((uint32_t)(n_res) * 72u) : 0u) +                       \
+   (uint32_t)(audit_n) * 16u + 16u)
 
 /* Core API (V0.1). */
 /* Initialize a budget instance in caller-provided storage. Storage must be uint32_t-aligned. */
@@ -309,6 +340,18 @@ typedef void (*loxbudget_decision_hook_fn)(void* user, const loxbudget_decision_
                                            loxbudget_op_id_t op);
 loxbudget_status_t loxbudget_set_decision_hook(loxbudget_t* budget, loxbudget_decision_hook_fn fn,
                                                void* user);
+
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+loxbudget_status_t loxbudget_set_rate_limit(loxbudget_t* budget, loxbudget_resource_id_t res,
+                                            loxbudget_window_t window, uint32_t limit);
+loxbudget_status_t loxbudget_set_lifetime_limit(loxbudget_t* budget, loxbudget_resource_id_t res,
+                                                uint32_t lifetime_max);
+loxbudget_status_t loxbudget_get_burn_rate(const loxbudget_t* budget, loxbudget_resource_id_t res,
+                                           loxbudget_burn_rate_t* out);
+#endif
+
+loxbudget_status_t loxbudget_yield_check(loxbudget_t* budget, loxbudget_lease_t lease,
+                                         loxbudget_pressure_hint_t* out);
 
 #if LOXBUDGET_ENABLE_AUDIT_TRAIL
 loxbudget_status_t loxbudget_audit_get_recent(const loxbudget_t* budget,

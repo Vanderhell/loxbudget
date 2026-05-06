@@ -37,7 +37,7 @@ LOXBUDGET_STATIC_ASSERT(sizeof(loxbudget_need_t) == 4, "need size");
 typedef struct {
   uint16_t magic;
   uint8_t active;
-  uint8_t _pad;
+  uint8_t acquired_pressure;
 } loxbudget_lease_slot_t;
 LOXBUDGET_STATIC_ASSERT(sizeof(loxbudget_lease_slot_t) == 4, "lease slot meta");
 
@@ -72,6 +72,43 @@ static loxbudget_decision_record_t* loxbudget_audit_buf_(loxbudget_t* b) {
 static const loxbudget_decision_record_t* loxbudget_audit_buf_c_(const loxbudget_t* b) {
   return (const loxbudget_decision_record_t*)(b->storage + b->audit_off);
 }
+
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+typedef struct {
+  uint32_t window_start_ms;
+  uint32_t window_duration_ms;
+  uint32_t consumed;
+  uint32_t limit;
+} lb__rate_window_t;
+typedef struct {
+  lb__rate_window_t windows[4];
+  uint32_t consumed_lifetime;
+  uint32_t limit_lifetime;
+} lb__rate_state_t;
+LOXBUDGET_STATIC_ASSERT(sizeof(lb__rate_state_t) == 72, "rate state size");
+
+static lb__rate_state_t* lb__rate_state_(loxbudget_t* b) {
+  return (lb__rate_state_t*)(b->storage + b->rate_off);
+}
+static const lb__rate_state_t* lb__rate_state_c_(const loxbudget_t* b) {
+  return (const lb__rate_state_t*)(b->storage + b->rate_off);
+}
+
+static uint32_t lb__window_duration_ms_(loxbudget_window_t w) {
+  switch (w) {
+  case LOXBUDGET_WINDOW_SECOND:
+    return 1000u;
+  case LOXBUDGET_WINDOW_MINUTE:
+    return 60000u;
+  case LOXBUDGET_WINDOW_HOUR:
+    return 3600000u;
+  case LOXBUDGET_WINDOW_DAY:
+    return 86400000u;
+  default:
+    return 0u;
+  }
+}
+#endif
 
 static loxbudget_storage_hdr_t* loxbudget_hdr_(loxbudget_t* b) {
   return (loxbudget_storage_hdr_t*)b->storage;
@@ -251,6 +288,7 @@ loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t sto
   budget->audit_count = 0u;
   budget->decision_hook = NULL;
   budget->decision_hook_user = NULL;
+  budget->rate_off = 0u;
 
   /* Compute table layout within user storage. */
   {
@@ -283,6 +321,12 @@ loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t sto
     off += (uint32_t)cfg->audit_size * (uint32_t)sizeof(loxbudget_decision_record_t);
     off = LOXBUDGET_ALIGN_UP(off, align);
 
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+    budget->rate_off = off;
+    off += (uint32_t)budget->max_resources * (uint32_t)sizeof(lb__rate_state_t);
+    off = LOXBUDGET_ALIGN_UP(off, align);
+#endif
+
     /* Alignment slack. */
     off += 16u;
 
@@ -306,6 +350,10 @@ loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t sto
     memset(loxbudget_audit_buf_(budget), 0,
            (size_t)budget->audit_size * sizeof(loxbudget_decision_record_t));
   }
+
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+  memset(lb__rate_state_(budget), 0, (size_t)budget->max_resources * sizeof(lb__rate_state_t));
+#endif
 
   /* Initialize per-instance lease magic base. */
   {
@@ -360,6 +408,141 @@ loxbudget_status_t loxbudget_set_decision_hook(loxbudget_t* budget, loxbudget_de
   budget->decision_hook_user = user;
   return LOXBUDGET_OK;
 }
+
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+loxbudget_status_t loxbudget_set_rate_limit(loxbudget_t* budget, loxbudget_resource_id_t res,
+                                            loxbudget_window_t window, uint32_t limit) {
+  loxbudget_status_t st = loxbudget_validate_budget_(budget);
+  if (st != LOXBUDGET_OK) { return st; }
+  if (res >= budget->max_resources) { return LOXBUDGET_ERR_INVALID_ARG; }
+  if (window > LOXBUDGET_WINDOW_DAY) { return LOXBUDGET_ERR_INVALID_ARG; }
+  if (loxbudget_hdr_c_(budget)->res_cfg[res] == 0u) { return LOXBUDGET_ERR_NOT_FOUND; }
+  if ((loxbudget_resource_kind_t)loxbudget_resources_c_(budget)[res].kind !=
+      LOXBUDGET_RES_CONSUMABLE) {
+    return LOXBUDGET_ERR_INVALID_ARG;
+  }
+
+  const uint32_t dur = lb__window_duration_ms_(window);
+  if (dur == 0u) { return LOXBUDGET_ERR_INVALID_ARG; }
+
+  lb__rate_state_t* rs = &lb__rate_state_(budget)[res];
+  lb__rate_window_t* w = &rs->windows[(uint8_t)window];
+  w->window_duration_ms = dur;
+  w->window_start_ms = loxbudget_hal_now_ms_(budget);
+  w->limit = limit;
+#if LOXBUDGET_RATE_IMPL == LOXBUDGET_RATE_IMPL_TOKEN_BUCKET
+  w->consumed = (uint32_t)(((uint64_t)limit) << 16);
+#else
+  w->consumed = 0u;
+#endif
+  return LOXBUDGET_OK;
+}
+
+loxbudget_status_t loxbudget_set_lifetime_limit(loxbudget_t* budget, loxbudget_resource_id_t res,
+                                                uint32_t lifetime_max) {
+  loxbudget_status_t st = loxbudget_validate_budget_(budget);
+  if (st != LOXBUDGET_OK) { return st; }
+  if (res >= budget->max_resources) { return LOXBUDGET_ERR_INVALID_ARG; }
+  if (loxbudget_hdr_c_(budget)->res_cfg[res] == 0u) { return LOXBUDGET_ERR_NOT_FOUND; }
+  if ((loxbudget_resource_kind_t)loxbudget_resources_c_(budget)[res].kind !=
+      LOXBUDGET_RES_CONSUMABLE) {
+    return LOXBUDGET_ERR_INVALID_ARG;
+  }
+  lb__rate_state_t* rs = &lb__rate_state_(budget)[res];
+  rs->limit_lifetime = lifetime_max;
+  /* consumed_lifetime intentionally not reset to support .noinit reuse. */
+  return LOXBUDGET_OK;
+}
+
+static loxbudget_bool_t lb__rate_roll_and_check_(lb__rate_window_t* w, uint32_t now_ms,
+                                                 uint32_t amount) {
+#if LOXBUDGET_RATE_IMPL == LOXBUDGET_RATE_IMPL_TOKEN_BUCKET
+  if (w->limit == 0u || w->window_duration_ms == 0u) { return LOXBUDGET_TRUE; }
+  /* consumed is tokens in Q16.16, window_start_ms is last refill timestamp. */
+  {
+    const uint32_t dt = now_ms - w->window_start_ms;
+    if (dt != 0u) {
+      const uint64_t cap = ((uint64_t)w->limit) << 16;
+      const uint64_t add = (cap * (uint64_t)dt) / (uint64_t)w->window_duration_ms;
+      uint64_t tok = (uint64_t)w->consumed + add;
+      if (tok > cap) { tok = cap; }
+      w->consumed = (uint32_t)tok;
+      w->window_start_ms = now_ms;
+    }
+    const uint64_t need = ((uint64_t)amount) << 16;
+    return ((uint64_t)w->consumed >= need) ? LOXBUDGET_TRUE : LOXBUDGET_FALSE;
+  }
+#else
+  if (w->limit == 0u || w->window_duration_ms == 0u) { return LOXBUDGET_TRUE; }
+  if ((uint32_t)(now_ms - w->window_start_ms) >= w->window_duration_ms) {
+    w->window_start_ms = now_ms;
+    w->consumed = 0u;
+  }
+  if (w->consumed > w->limit) { return LOXBUDGET_FALSE; }
+  if (amount > (w->limit - w->consumed)) { return LOXBUDGET_FALSE; }
+  return LOXBUDGET_TRUE;
+#endif
+}
+
+static void lb__rate_commit_(lb__rate_window_t* w, uint32_t now_ms, uint32_t amount) {
+#if LOXBUDGET_RATE_IMPL == LOXBUDGET_RATE_IMPL_TOKEN_BUCKET
+  if (w->limit == 0u || w->window_duration_ms == 0u) { return; }
+  /* Refill as in check, then consume tokens. */
+  (void)lb__rate_roll_and_check_(w, now_ms, 0u);
+  {
+    const uint64_t need = ((uint64_t)amount) << 16;
+    if ((uint64_t)w->consumed >= need) {
+      w->consumed = (uint32_t)((uint64_t)w->consumed - need);
+    } else {
+      w->consumed = 0u;
+    }
+  }
+#else
+  if (w->limit == 0u || w->window_duration_ms == 0u) { return; }
+  if ((uint32_t)(now_ms - w->window_start_ms) >= w->window_duration_ms) {
+    w->window_start_ms = now_ms;
+    w->consumed = 0u;
+  }
+  if (0xFFFFFFFFu - w->consumed < amount) {
+    w->consumed = 0xFFFFFFFFu;
+  } else {
+    w->consumed += amount;
+  }
+#endif
+}
+
+loxbudget_status_t loxbudget_get_burn_rate(const loxbudget_t* budget, loxbudget_resource_id_t res,
+                                           loxbudget_burn_rate_t* out) {
+  loxbudget_status_t st = loxbudget_validate_budget_(budget);
+  if (st != LOXBUDGET_OK || out == NULL) { return (out == NULL) ? LOXBUDGET_ERR_INVALID_ARG : st; }
+  if (res >= budget->max_resources) { return LOXBUDGET_ERR_INVALID_ARG; }
+  if (loxbudget_hdr_c_(budget)->res_cfg[res] == 0u) { return LOXBUDGET_ERR_NOT_FOUND; }
+  const lb__rate_state_t* rs = &lb__rate_state_c_(budget)[res];
+
+  memset(out, 0, sizeof(*out));
+#if LOXBUDGET_RATE_IMPL == LOXBUDGET_RATE_IMPL_TOKEN_BUCKET
+  out->per_minute = 0u;
+  out->per_hour = 0u;
+#else
+  out->per_minute = rs->windows[(uint8_t)LOXBUDGET_WINDOW_MINUTE].consumed;
+  out->per_hour = rs->windows[(uint8_t)LOXBUDGET_WINDOW_HOUR].consumed;
+#endif
+
+  if (rs->limit_lifetime == 0u) { return LOXBUDGET_OK; }
+  if (rs->consumed_lifetime >= rs->limit_lifetime) { return LOXBUDGET_OK; }
+
+  /* Use minute window rate as estimator; avoid division by zero. */
+  if (out->per_minute == 0u) { return LOXBUDGET_OK; }
+
+  {
+    const uint32_t remaining = rs->limit_lifetime - rs->consumed_lifetime;
+    /* remaining / (per_minute per 60000ms) => ms */
+    const uint64_t num = (uint64_t)remaining * 60000ull;
+    out->estimated_exhaustion_ms = (uint32_t)(num / (uint64_t)out->per_minute);
+  }
+  return LOXBUDGET_OK;
+}
+#endif /* LOXBUDGET_ENABLE_RATE_WINDOWS */
 
 loxbudget_status_t loxbudget_set_pressure(loxbudget_t* budget, loxbudget_pressure_t pressure) {
   loxbudget_status_t st = loxbudget_validate_budget_(budget);
@@ -574,6 +757,10 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
       out->reason = (uint8_t)LOXBUDGET_REASON_PRECONDITION_FAIL;
       budget->total_decisions++;
       budget->total_denials++;
+      loxbudget_audit_record_(budget, op, out);
+      if (budget->decision_hook != NULL) {
+        budget->decision_hook(budget->decision_hook_user, out, op);
+      }
       return LOXBUDGET_OK;
     }
   }
@@ -584,6 +771,10 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
       out->reason = (uint8_t)LOXBUDGET_REASON_HAL_NOT_CONFIGURED;
       budget->total_decisions++;
       budget->total_denials++;
+      loxbudget_audit_record_(budget, op, out);
+      if (budget->decision_hook != NULL) {
+        budget->decision_hook(budget->decision_hook_user, out, op);
+      }
       return LOXBUDGET_OK;
     }
     if (v == LOXBUDGET_FALSE) {
@@ -591,6 +782,10 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
       out->reason = (uint8_t)LOXBUDGET_REASON_PRECONDITION_FAIL;
       budget->total_decisions++;
       budget->total_denials++;
+      loxbudget_audit_record_(budget, op, out);
+      if (budget->decision_hook != NULL) {
+        budget->decision_hook(budget->decision_hook_user, out, op);
+      }
       return LOXBUDGET_OK;
     }
   }
@@ -599,6 +794,7 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
   {
     const loxbudget_need_t* list =
         &loxbudget_needs_c_(budget)[(uint32_t)op * LOXBUDGET_MAX_NEEDS_PER_OP];
+    const uint32_t now_ms = loxbudget_hal_now_ms_(budget);
     uint8_t i;
     for (i = 0u; i < LOXBUDGET_MAX_NEEDS_PER_OP; i++) {
       const loxbudget_need_t n = list[i];
@@ -659,6 +855,52 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
         }
         return LOXBUDGET_OK;
       }
+
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+      if ((p->flags & LOXBUDGET_OPF_BYPASS_RATE_LIMIT) == 0u &&
+          (loxbudget_resource_kind_t)r->kind == LOXBUDGET_RES_CONSUMABLE) {
+        lb__rate_state_t* rs = &lb__rate_state_(budget)[n.resource];
+
+        if (rs->limit_lifetime != 0u) {
+          if (rs->consumed_lifetime > rs->limit_lifetime ||
+              (uint32_t)n.amount > (rs->limit_lifetime - rs->consumed_lifetime)) {
+            out->action = LOXBUDGET_REJECT;
+            out->reason = (uint8_t)LOXBUDGET_REASON_LIFETIME_EXHAUSTED;
+            out->denied_resource = n.resource;
+            out->requested = n.amount;
+            out->available = 0u;
+            budget->total_decisions++;
+            budget->total_denials++;
+            loxbudget_audit_record_(budget, op, out);
+            if (budget->decision_hook != NULL) {
+              budget->decision_hook(budget->decision_hook_user, out, op);
+            }
+            return LOXBUDGET_OK;
+          }
+        }
+
+        {
+          uint8_t wi;
+          for (wi = 0u; wi < 4u; wi++) {
+            if (lb__rate_roll_and_check_(&rs->windows[wi], now_ms, (uint32_t)n.amount) ==
+                LOXBUDGET_FALSE) {
+              out->action = LOXBUDGET_REJECT;
+              out->reason = (uint8_t)LOXBUDGET_REASON_RATE_LIMIT;
+              out->denied_resource = n.resource;
+              out->requested = n.amount;
+              out->available = 0u;
+              budget->total_decisions++;
+              budget->total_denials++;
+              loxbudget_audit_record_(budget, op, out);
+              if (budget->decision_hook != NULL) {
+                budget->decision_hook(budget->decision_hook_user, out, op);
+              }
+              return LOXBUDGET_OK;
+            }
+          }
+        }
+      }
+#endif
     }
   }
 
@@ -681,6 +923,9 @@ loxbudget_status_t loxbudget_enter(loxbudget_t* budget, loxbudget_op_id_t op,
   loxbudget_status_t st = loxbudget_check(budget, op, &d);
   if (st != LOXBUDGET_OK) { return st; }
   if (out_lease == NULL) { return LOXBUDGET_ERR_INVALID_ARG; }
+
+  const loxbudget_op_profile_t* p = loxbudget_profile_c_(budget, op);
+  if (p == NULL) { return LOXBUDGET_ERR_BAD_STATE; }
 
   if (d.action != LOXBUDGET_ALLOW_FULL && d.action != LOXBUDGET_ALLOW_DEGRADED) {
     memset(out_lease, 0, sizeof(*out_lease));
@@ -731,11 +976,28 @@ loxbudget_status_t loxbudget_enter(loxbudget_t* budget, loxbudget_op_id_t op,
       } else if ((loxbudget_resource_kind_t)r->kind == LOXBUDGET_RES_CONSUMABLE) {
         r->used = (uint16_t)(r->used + n.amount);
         if (r->used > r->high_watermark) { r->high_watermark = r->used; }
+
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+        if ((p->flags & LOXBUDGET_OPF_BYPASS_RATE_LIMIT) == 0u) {
+          lb__rate_state_t* rs = &lb__rate_state_(budget)[n.resource];
+          const uint32_t now_ms = loxbudget_hal_now_ms_(budget);
+          uint8_t wi;
+          for (wi = 0u; wi < 4u; wi++) {
+            lb__rate_commit_(&rs->windows[wi], now_ms, (uint32_t)n.amount);
+          }
+          if (0xFFFFFFFFu - rs->consumed_lifetime < (uint32_t)n.amount) {
+            rs->consumed_lifetime = 0xFFFFFFFFu;
+          } else {
+            rs->consumed_lifetime += (uint32_t)n.amount;
+          }
+        }
+#endif
       }
     }
 
     slots[slot_id].active = 1u;
     slots[slot_id].magic = loxbudget_lease_magic_for_id_(budget, slot_id);
+    slots[slot_id].acquired_pressure = budget->pressure;
 
     out_lease->acquired_at_ms = loxbudget_hal_now_ms_(budget);
     out_lease->magic = slots[slot_id].magic;
@@ -786,5 +1048,48 @@ loxbudget_status_t loxbudget_leave(loxbudget_t* budget, loxbudget_lease_t lease)
   }
   loxbudget_critical_exit_(budget);
   (void)p;
+  return LOXBUDGET_OK;
+}
+
+loxbudget_status_t loxbudget_yield_check(loxbudget_t* budget, loxbudget_lease_t lease,
+                                         loxbudget_pressure_hint_t* out) {
+  loxbudget_status_t st = loxbudget_validate_budget_(budget);
+  if (st != LOXBUDGET_OK || out == NULL) { return (out == NULL) ? LOXBUDGET_ERR_INVALID_ARG : st; }
+  if (lease.id >= budget->max_leases) { return LOXBUDGET_ERR_INVALID_ARG; }
+  if (lease.magic != loxbudget_lease_magic_for_id_(budget, lease.id)) {
+    return LOXBUDGET_ERR_BAD_STATE;
+  }
+  if (loxbudget_profile_c_(budget, lease.op) == NULL) { return LOXBUDGET_ERR_BAD_STATE; }
+
+  {
+    const loxbudget_lease_slot_t* slots = loxbudget_lease_slots_c_(budget);
+    if (slots[lease.id].active == 0u || slots[lease.id].magic != lease.magic) {
+      return LOXBUDGET_ERR_BAD_STATE;
+    }
+
+    const uint8_t prev = slots[lease.id].acquired_pressure;
+    const uint8_t cur = budget->pressure;
+    if (cur == prev) {
+      *out = LOXBUDGET_PRESSURE_HOLDING;
+    } else if (cur > prev) {
+      *out = LOXBUDGET_PRESSURE_RISING;
+    } else {
+      *out = LOXBUDGET_PRESSURE_FALLING;
+    }
+
+    /* Abort hint: if pressure-mapped action is no longer an allow. */
+    {
+      const loxbudget_op_profile_t* p = loxbudget_profile_c_(budget, lease.op);
+      const uint8_t a = loxbudget_mapped_action_(p, cur);
+      if (cur == (uint8_t)LOXBUDGET_PRESSURE_LOCKDOWN &&
+          (p->flags & LOXBUDGET_OPF_LOCKDOWN_PASS) == 0u) {
+        *out = LOXBUDGET_SHOULD_ABORT;
+      } else if (a == (uint8_t)LOXBUDGET_WAIT || a == (uint8_t)LOXBUDGET_REJECT ||
+                 a == (uint8_t)LOXBUDGET_LOCKDOWN) {
+        *out = LOXBUDGET_SHOULD_ABORT;
+      }
+    }
+  }
+
   return LOXBUDGET_OK;
 }

@@ -34,6 +34,10 @@ int main(void) {
   if (loxbudget_init(&b, storage, sizeof(storage), &cfg) != LOXBUDGET_OK) return 1;
 
   (void)loxbudget_set_resource(&b, 0, 100, LOXBUDGET_RES_CONSUMABLE); /* flash writes */
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+  (void)loxbudget_set_rate_limit(&b, 0, LOXBUDGET_WINDOW_MINUTE, 60);
+  (void)loxbudget_set_lifetime_limit(&b, 0, 1000);
+#endif
   (void)loxbudget_register_op(&b, &ota);
   (void)loxbudget_op_set_need(&b, 0, 0, 10);
 
