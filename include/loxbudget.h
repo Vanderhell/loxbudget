@@ -252,6 +252,8 @@ typedef struct {
   uint8_t audit_head;
   uint8_t audit_count;
   uint8_t _pad2;
+  void (*decision_hook)(void* user, const loxbudget_decision_t* d, loxbudget_op_id_t op);
+  void* decision_hook_user;
   const loxbudget_hal_callbacks_t* hal_cb;
   void* hal_user;
   loxbudget_bool_t hal_strict;
@@ -302,6 +304,11 @@ loxbudget_pressure_t loxbudget_get_pressure(const loxbudget_t* budget);
 
 /* Get a read-only snapshot of instance counters and state. */
 loxbudget_status_t loxbudget_snapshot(const loxbudget_t* budget, loxbudget_snapshot_t* out);
+
+typedef void (*loxbudget_decision_hook_fn)(void* user, const loxbudget_decision_t* d,
+                                           loxbudget_op_id_t op);
+loxbudget_status_t loxbudget_set_decision_hook(loxbudget_t* budget, loxbudget_decision_hook_fn fn,
+                                               void* user);
 
 #if LOXBUDGET_ENABLE_AUDIT_TRAIL
 loxbudget_status_t loxbudget_audit_get_recent(const loxbudget_t* budget,

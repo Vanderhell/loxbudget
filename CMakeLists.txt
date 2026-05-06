@@ -12,3 +12,8 @@ target_include_directories(test_header_compiles PRIVATE include)
 add_executable(test_v0_1 tests/test_v0_1.c)
 target_link_libraries(test_v0_1 PRIVATE loxbudget)
 target_include_directories(test_v0_1 PRIVATE include)
+
+add_executable(test_microlog_adapter tests/test_microlog_adapter.c
+                                     adapters/microlog/loxbudget_microlog_adapter.c)
+target_include_directories(test_microlog_adapter PRIVATE include adapters/microlog)
+target_link_libraries(test_microlog_adapter PRIVATE loxbudget)

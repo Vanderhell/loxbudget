@@ -249,6 +249,8 @@ loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t sto
   budget->audit_size = cfg->audit_size;
   budget->audit_head = 0u;
   budget->audit_count = 0u;
+  budget->decision_hook = NULL;
+  budget->decision_hook_user = NULL;
 
   /* Compute table layout within user storage. */
   {
@@ -347,6 +349,15 @@ loxbudget_status_t loxbudget_snapshot(const loxbudget_t* budget, loxbudget_snaps
   out->total_degradations = budget->total_degradations;
   out->uptime_ms = loxbudget_hal_now_ms_(budget);
 
+  return LOXBUDGET_OK;
+}
+
+loxbudget_status_t loxbudget_set_decision_hook(loxbudget_t* budget, loxbudget_decision_hook_fn fn,
+                                               void* user) {
+  loxbudget_status_t st = loxbudget_validate_budget_(budget);
+  if (st != LOXBUDGET_OK) { return st; }
+  budget->decision_hook = (void (*)(void*, const loxbudget_decision_t*, loxbudget_op_id_t))fn;
+  budget->decision_hook_user = user;
   return LOXBUDGET_OK;
 }
 
@@ -481,6 +492,9 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
     budget->total_decisions++;
     budget->total_denials++;
     loxbudget_audit_record_(budget, op, out);
+    if (budget->decision_hook != NULL) {
+      budget->decision_hook(budget->decision_hook_user, out, op);
+    }
     return LOXBUDGET_OK;
   }
 
@@ -496,6 +510,9 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
       budget->total_decisions++;
       budget->total_denials++;
       loxbudget_audit_record_(budget, op, out);
+      if (budget->decision_hook != NULL) {
+        budget->decision_hook(budget->decision_hook_user, out, op);
+      }
       return LOXBUDGET_OK;
     }
   }
@@ -507,6 +524,9 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
     budget->total_decisions++;
     budget->total_denials++;
     loxbudget_audit_record_(budget, op, out);
+    if (budget->decision_hook != NULL) {
+      budget->decision_hook(budget->decision_hook_user, out, op);
+    }
     return LOXBUDGET_OK;
   }
 
@@ -519,6 +539,9 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
       budget->total_decisions++;
       budget->total_denials++;
       loxbudget_audit_record_(budget, op, out);
+      if (budget->decision_hook != NULL) {
+        budget->decision_hook(budget->decision_hook_user, out, op);
+      }
       return LOXBUDGET_OK;
     }
     if (v == LOXBUDGET_FALSE) {
@@ -527,6 +550,9 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
       budget->total_decisions++;
       budget->total_denials++;
       loxbudget_audit_record_(budget, op, out);
+      if (budget->decision_hook != NULL) {
+        budget->decision_hook(budget->decision_hook_user, out, op);
+      }
       return LOXBUDGET_OK;
     }
   }
@@ -538,6 +564,9 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
       budget->total_decisions++;
       budget->total_denials++;
       loxbudget_audit_record_(budget, op, out);
+      if (budget->decision_hook != NULL) {
+        budget->decision_hook(budget->decision_hook_user, out, op);
+      }
       return LOXBUDGET_OK;
     }
     if (v == LOXBUDGET_FALSE) {
@@ -584,6 +613,9 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
         budget->total_decisions++;
         budget->total_denials++;
         loxbudget_audit_record_(budget, op, out);
+        if (budget->decision_hook != NULL) {
+          budget->decision_hook(budget->decision_hook_user, out, op);
+        }
         return LOXBUDGET_OK;
       }
 
@@ -598,6 +630,9 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
           budget->total_decisions++;
           budget->total_denials++;
           loxbudget_audit_record_(budget, op, out);
+          if (budget->decision_hook != NULL) {
+            budget->decision_hook(budget->decision_hook_user, out, op);
+          }
           return LOXBUDGET_OK;
         }
         continue;
@@ -619,6 +654,9 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
         budget->total_decisions++;
         budget->total_denials++;
         loxbudget_audit_record_(budget, op, out);
+        if (budget->decision_hook != NULL) {
+          budget->decision_hook(budget->decision_hook_user, out, op);
+        }
         return LOXBUDGET_OK;
       }
     }
@@ -633,6 +671,7 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
     budget->total_grants++;
   }
   loxbudget_audit_record_(budget, op, out);
+  if (budget->decision_hook != NULL) { budget->decision_hook(budget->decision_hook_user, out, op); }
   return LOXBUDGET_OK;
 }
 
