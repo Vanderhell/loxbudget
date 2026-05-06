@@ -8,7 +8,7 @@ CFLAGS ?= -std=c99 -Wall -Wextra -Werror -Iinclude
 LDFLAGS ?=
 
 LOXBUDGET_OBJS := $(BUILD_DIR)/loxbudget_core.o $(BUILD_DIR)/loxbudget_audit.o \
-	$(BUILD_DIR)/loxbudget_hal.o $(BUILD_DIR)/loxbudget_strings.o
+	$(BUILD_DIR)/loxbudget_hal.o $(BUILD_DIR)/loxbudget_strings.o $(BUILD_DIR)/loxbudget_calibration.o
 
 all: $(BUILD_DIR)/libloxbudget.a header-check
 
@@ -25,6 +25,9 @@ $(BUILD_DIR)/loxbudget_hal.o: src/loxbudget_hal.c include/loxbudget.h | $(BUILD_
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/loxbudget_strings.o: src/loxbudget_strings.c include/loxbudget.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/loxbudget_calibration.o: src/loxbudget_calibration.c include/loxbudget.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/libloxbudget.a: $(LOXBUDGET_OBJS)
@@ -88,4 +91,3 @@ cross: | $(BUILD_DIR)
 		-ffreestanding -c src/loxbudget_core.c -o $(BUILD_DIR)/loxbudget_arm.o
 	arm-none-eabi-gcc -std=c99 -Wall -Wextra -Werror -Iinclude -Os -mcpu=cortex-m0 -mthumb \
 		-ffreestanding -c src/loxbudget_hal.c -o $(BUILD_DIR)/loxbudget_hal_arm.o
-

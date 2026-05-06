@@ -792,6 +792,33 @@ static void test_burn_rate_basic(void) {
 }
 #endif
 
+#if LOXBUDGET_ENABLE_CALIBRATION
+static void test_calibration_basic(void) {
+  loxbudget_t b;
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
+  loxbudget_op_profile_t p = profile_allow_(0);
+  loxbudget_sample_t s;
+  loxbudget_suggested_profile_t out;
+
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_register_op(&b, &p) == LOXBUDGET_OK);
+
+  assert(loxbudget_calibrate_begin(&b, 0, 10) == LOXBUDGET_OK);
+  memset(&s, 0, sizeof(s));
+  for (uint32_t i = 0; i < 10u; i++) {
+    s.ram_used = (uint16_t)(10u + i);
+    s.duration_us = (uint32_t)(1000u + i);
+    assert(loxbudget_calibrate_sample(&b, 0, &s) == LOXBUDGET_OK);
+  }
+  assert(loxbudget_calibrate_end(&b, 0, &out) == LOXBUDGET_OK);
+  assert(out.sample_count == 10u);
+  assert(out.suggested_ram_limit >= out.ram_max);
+
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+#endif
+
 int main(void) {
   test_init_invalid_args();
   test_init_valid();
@@ -830,6 +857,9 @@ int main(void) {
   test_rate_limit_basic_and_rollover();
   test_lifetime_limit_basic();
   test_burn_rate_basic();
+#endif
+#if LOXBUDGET_ENABLE_CALIBRATION
+  test_calibration_basic();
 #endif
   return 0;
 }

@@ -289,6 +289,7 @@ loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t sto
   budget->decision_hook = NULL;
   budget->decision_hook_user = NULL;
   budget->rate_off = 0u;
+  budget->calib_off = 0u;
 
   /* Compute table layout within user storage. */
   {
@@ -324,6 +325,12 @@ loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t sto
 #if LOXBUDGET_ENABLE_RATE_WINDOWS
     budget->rate_off = off;
     off += (uint32_t)budget->max_resources * (uint32_t)sizeof(lb__rate_state_t);
+    off = LOXBUDGET_ALIGN_UP(off, align);
+#endif
+
+#if LOXBUDGET_ENABLE_CALIBRATION
+    budget->calib_off = off;
+    off += 256u; /* single active calibration state (fixed size) */
     off = LOXBUDGET_ALIGN_UP(off, align);
 #endif
 

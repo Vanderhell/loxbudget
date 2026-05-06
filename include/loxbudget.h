@@ -212,6 +212,28 @@ LOXBUDGET_STATIC_ASSERT(sizeof(loxbudget_decision_record_t) == 16,
                         "loxbudget_decision_record_t size");
 
 typedef struct {
+  uint16_t ram_used;
+  uint16_t stack_estimate;
+  uint16_t flash_writes;
+  uint16_t queue_peak;
+  uint32_t duration_us;
+} loxbudget_sample_t;
+
+typedef struct {
+  uint16_t ram_p50;
+  uint16_t ram_p95;
+  uint16_t ram_p99;
+  uint16_t ram_max;
+  uint32_t duration_p95_us;
+  uint32_t duration_p99_us;
+  uint32_t duration_max_us;
+  uint16_t suggested_ram_limit;
+  uint32_t suggested_time_limit_us;
+  uint16_t outlier_count;
+  uint32_t sample_count;
+} loxbudget_suggested_profile_t;
+
+typedef struct {
   uint8_t pressure;
   uint8_t active_lease_count;
   uint8_t resource_count;
@@ -277,6 +299,7 @@ typedef struct {
   uint32_t lease_slots_off;
   uint32_t audit_off;
   uint32_t rate_off;
+  uint32_t calib_off;
   uint8_t audit_size;
   uint8_t audit_head;
   uint8_t audit_count;
@@ -295,7 +318,7 @@ typedef struct {
    (uint32_t)(n_ops) * (uint32_t)LOXBUDGET_MAX_NEEDS_PER_OP * 4u +                                 \
    (uint32_t)LOXBUDGET_MAX_LEASES * 8u +                                                           \
    ((LOXBUDGET_ENABLE_RATE_WINDOWS != 0) ? ((uint32_t)(n_res) * 72u) : 0u) +                       \
-   (uint32_t)(audit_n) * 16u + 16u)
+   ((LOXBUDGET_ENABLE_CALIBRATION != 0) ? 256u : 0u) + (uint32_t)(audit_n) * 16u + 16u)
 
 /* Core API (V0.1). */
 /* Initialize a budget instance in caller-provided storage. Storage must be uint32_t-aligned. */
@@ -352,6 +375,15 @@ loxbudget_status_t loxbudget_get_burn_rate(const loxbudget_t* budget, loxbudget_
 
 loxbudget_status_t loxbudget_yield_check(loxbudget_t* budget, loxbudget_lease_t lease,
                                          loxbudget_pressure_hint_t* out);
+
+#if LOXBUDGET_ENABLE_CALIBRATION
+loxbudget_status_t loxbudget_calibrate_begin(loxbudget_t* budget, loxbudget_op_id_t op,
+                                             uint32_t target_samples);
+loxbudget_status_t loxbudget_calibrate_sample(loxbudget_t* budget, loxbudget_op_id_t op,
+                                              const loxbudget_sample_t* sample);
+loxbudget_status_t loxbudget_calibrate_end(loxbudget_t* budget, loxbudget_op_id_t op,
+                                           loxbudget_suggested_profile_t* out);
+#endif
 
 #if LOXBUDGET_ENABLE_AUDIT_TRAIL
 loxbudget_status_t loxbudget_audit_get_recent(const loxbudget_t* budget,
