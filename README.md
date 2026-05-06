@@ -8,6 +8,8 @@ Tiny no-heap C99 library for embedded firmware: pre-flight checks for embedded o
 - No heap, no floats, no global mutable state (all state is user-owned storage).
 - Optional audit ring buffer (`LOXBUDGET_ENABLE_AUDIT_TRAIL`) to retrieve recent decisions.
 - Optional diagnostic strings (`LOXBUDGET_ENABLE_DIAGNOSTIC_STRINGS`).
+- Optional rate windows + lifetime limits (`LOXBUDGET_ENABLE_RATE_WINDOWS`).
+- Optional calibration (`LOXBUDGET_ENABLE_CALIBRATION`).
 
 ## Quick start
 
