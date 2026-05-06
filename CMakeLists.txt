@@ -7,3 +7,7 @@ target_include_directories(loxbudget PUBLIC include)
 
 add_executable(test_header_compiles tests/test_header_compiles.c)
 target_include_directories(test_header_compiles PRIVATE include)
+
+add_executable(test_v0_1 tests/test_v0_1.c)
+target_link_libraries(test_v0_1 PRIVATE loxbudget)
+target_include_directories(test_v0_1 PRIVATE include)

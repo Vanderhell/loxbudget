@@ -20,8 +20,10 @@ extern "C" {
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 #define LOXBUDGET_STATIC_ASSERT(cond, msg) _Static_assert((cond), msg)
 #else
+#define LOXBUDGET_SA_JOIN2_(a, b) a##b
+#define LOXBUDGET_SA_JOIN_(a, b) LOXBUDGET_SA_JOIN2_(a, b)
 #define LOXBUDGET_STATIC_ASSERT(cond, msg) \
-  typedef char loxbudget_static_assertion_##__LINE__[(cond) ? 1 : -1]
+  typedef char LOXBUDGET_SA_JOIN_(loxbudget_static_assertion_, __LINE__)[(cond) ? 1 : -1]
 #endif
 #endif
 
@@ -227,7 +229,29 @@ typedef struct {
   void *hal_user;
 } loxbudget_config_t;
 
-typedef struct loxbudget_t loxbudget_t;
+typedef struct {
+  uint32_t magic;
+  uint8_t max_resources;
+  uint8_t max_ops;
+  uint8_t max_leases;
+  uint8_t pressure;
+  uint16_t lease_magic_base;
+  uint16_t _pad0;
+  uint32_t total_decisions;
+  uint32_t total_grants;
+  uint32_t total_denials;
+  uint32_t total_degradations;
+  uint32_t storage_size;
+  uint8_t *storage;
+  uint32_t resources_off;
+  uint32_t ops_off;
+  uint32_t needs_off;
+  uint32_t lease_slots_off;
+  const loxbudget_hal_callbacks_t *hal_cb;
+  void *hal_user;
+  loxbudget_bool_t hal_strict;
+  uint8_t _pad1[3];
+} loxbudget_t;
 
 /* Compile-time buffer sizing helper. */
 #define LOXBUDGET_REQUIRED_SIZE(n_res, n_ops, audit_n) \
