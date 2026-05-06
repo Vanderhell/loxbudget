@@ -10,17 +10,20 @@ int main(void) {
   cfg.hal_strict = 0;
   cfg.hal_callbacks = loxbudget_hal_default_permissive();
 
-  loxbudget_op_profile_t p = {0, LOXBUDGET_PRIO_NORMAL, LOXBUDGET_ALLOW_FULL,
-                              LOXBUDGET_ALLOW_FULL, LOXBUDGET_ALLOW_FULL,
-                              LOXBUDGET_ALLOW_FULL, LOXBUDGET_ALLOW_FULL, 0};
+  loxbudget_op_profile_t p = {0,
+                              LOXBUDGET_PRIO_NORMAL,
+                              LOXBUDGET_ALLOW_FULL,
+                              LOXBUDGET_ALLOW_FULL,
+                              LOXBUDGET_ALLOW_FULL,
+                              LOXBUDGET_ALLOW_FULL,
+                              LOXBUDGET_ALLOW_FULL,
+                              0};
   loxbudget_decision_t d;
 
-  if (loxbudget_init(&b, storage, sizeof(storage), &cfg) != LOXBUDGET_OK)
-    return 2;
+  if (loxbudget_init(&b, storage, sizeof(storage), &cfg) != LOXBUDGET_OK) return 2;
   (void)loxbudget_set_resource(&b, 0, 10, LOXBUDGET_RES_REUSABLE);
   (void)loxbudget_register_op(&b, &p);
   (void)loxbudget_op_set_need(&b, 0, 0, 5);
   (void)loxbudget_check(&b, 0, &d);
   return (d.action == LOXBUDGET_ALLOW_FULL) ? 0 : 1;
 }
-

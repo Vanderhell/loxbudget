@@ -22,7 +22,7 @@ extern "C" {
 #else
 #define LOXBUDGET_SA_JOIN2_(a, b) a##b
 #define LOXBUDGET_SA_JOIN_(a, b) LOXBUDGET_SA_JOIN2_(a, b)
-#define LOXBUDGET_STATIC_ASSERT(cond, msg) \
+#define LOXBUDGET_STATIC_ASSERT(cond, msg)                                                         \
   typedef char LOXBUDGET_SA_JOIN_(loxbudget_static_assertion_, __LINE__)[(cond) ? 1 : -1]
 #endif
 #endif
@@ -209,12 +209,12 @@ typedef struct {
 } loxbudget_snapshot_t;
 
 typedef struct loxbudget_hal_callbacks_t {
-  uint32_t (*now_ms)(void *user);
-  void (*critical_enter)(void *user);
-  void (*critical_exit)(void *user);
-  loxbudget_bool_t (*boot_proven)(void *user);
-  loxbudget_bool_t (*voltage_ok)(void *user);
-  loxbudget_bool_t (*network_up)(void *user);
+  uint32_t (*now_ms)(void* user);
+  void (*critical_enter)(void* user);
+  void (*critical_exit)(void* user);
+  loxbudget_bool_t (*boot_proven)(void* user);
+  loxbudget_bool_t (*voltage_ok)(void* user);
+  loxbudget_bool_t (*network_up)(void* user);
 } loxbudget_hal_callbacks_t;
 
 typedef struct {
@@ -225,8 +225,8 @@ typedef struct {
   uint8_t hal_strict;
   uint8_t _reserved[3];
   uint16_t flags;
-  const loxbudget_hal_callbacks_t *hal_callbacks;
-  void *hal_user;
+  const loxbudget_hal_callbacks_t* hal_callbacks;
+  void* hal_user;
 } loxbudget_config_t;
 
 typedef struct {
@@ -242,68 +242,61 @@ typedef struct {
   uint32_t total_denials;
   uint32_t total_degradations;
   uint32_t storage_size;
-  uint8_t *storage;
+  uint8_t* storage;
   uint32_t resources_off;
   uint32_t ops_off;
   uint32_t needs_off;
   uint32_t lease_slots_off;
-  const loxbudget_hal_callbacks_t *hal_cb;
-  void *hal_user;
+  const loxbudget_hal_callbacks_t* hal_cb;
+  void* hal_user;
   loxbudget_bool_t hal_strict;
   uint8_t _pad1[3];
 } loxbudget_t;
 
 /* Compile-time buffer sizing helper. */
-#define LOXBUDGET_REQUIRED_SIZE(n_res, n_ops, audit_n) \
-  (32u + (uint32_t)(n_res) * 12u + (uint32_t)(n_ops) * 8u + \
-   (uint32_t)(n_ops) * (uint32_t)LOXBUDGET_MAX_NEEDS_PER_OP * 4u + \
+#define LOXBUDGET_REQUIRED_SIZE(n_res, n_ops, audit_n)                                             \
+  (32u + (uint32_t)(n_res) * 12u + (uint32_t)(n_ops) * 8u +                                        \
+   (uint32_t)(n_ops) * (uint32_t)LOXBUDGET_MAX_NEEDS_PER_OP * 4u +                                 \
    (uint32_t)LOXBUDGET_MAX_LEASES * 8u + (uint32_t)(audit_n) * 16u + 16u)
 
 /* Core API (V0.1). */
 /* Initialize a budget instance in caller-provided storage. Storage must be uint32_t-aligned. */
-loxbudget_status_t loxbudget_init(loxbudget_t *budget, void *storage,
-                                 size_t storage_size,
-                                 const loxbudget_config_t *cfg);
+loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t storage_size,
+                                  const loxbudget_config_t* cfg);
 /* Deinitialize an instance and invalidate existing leases. */
-loxbudget_status_t loxbudget_deinit(loxbudget_t *budget);
+loxbudget_status_t loxbudget_deinit(loxbudget_t* budget);
 
 /* Define or replace a resource limit and kind. */
-loxbudget_status_t loxbudget_set_resource(loxbudget_t *budget,
-                                         loxbudget_resource_id_t id,
-                                         uint16_t limit,
-                                         loxbudget_resource_kind_t kind);
+loxbudget_status_t loxbudget_set_resource(loxbudget_t* budget, loxbudget_resource_id_t id,
+                                          uint16_t limit, loxbudget_resource_kind_t kind);
 
 /* Register an operation profile. */
-loxbudget_status_t loxbudget_register_op(loxbudget_t *budget,
-                                        const loxbudget_op_profile_t *profile);
+loxbudget_status_t loxbudget_register_op(loxbudget_t* budget,
+                                         const loxbudget_op_profile_t* profile);
 
 /* Declare that an operation needs a given resource amount. */
-loxbudget_status_t loxbudget_op_set_need(loxbudget_t *budget,
-                                        loxbudget_op_id_t op,
-                                        loxbudget_resource_id_t resource,
-                                        uint16_t amount);
+loxbudget_status_t loxbudget_op_set_need(loxbudget_t* budget, loxbudget_op_id_t op,
+                                         loxbudget_resource_id_t resource, uint16_t amount);
 
 /* Non-mutating decision query (does not reserve resources). */
-loxbudget_status_t loxbudget_check(loxbudget_t *budget, loxbudget_op_id_t op,
-                                  loxbudget_decision_t *out);
+loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
+                                   loxbudget_decision_t* out);
 
 /* Atomically reserve all needed resources and return a lease token. */
-loxbudget_status_t loxbudget_enter(loxbudget_t *budget, loxbudget_op_id_t op,
-                                  loxbudget_lease_t *out_lease);
+loxbudget_status_t loxbudget_enter(loxbudget_t* budget, loxbudget_op_id_t op,
+                                   loxbudget_lease_t* out_lease);
 
 /* Release a previously acquired lease and return reusable resources. */
-loxbudget_status_t loxbudget_leave(loxbudget_t *budget, loxbudget_lease_t lease);
+loxbudget_status_t loxbudget_leave(loxbudget_t* budget, loxbudget_lease_t lease);
 
 /* Set the current global pressure state (application-controlled). */
-loxbudget_status_t loxbudget_set_pressure(loxbudget_t *budget,
-                                         loxbudget_pressure_t pressure);
+loxbudget_status_t loxbudget_set_pressure(loxbudget_t* budget, loxbudget_pressure_t pressure);
 
 /* Get current global pressure state. */
-loxbudget_pressure_t loxbudget_get_pressure(const loxbudget_t *budget);
+loxbudget_pressure_t loxbudget_get_pressure(const loxbudget_t* budget);
 
 /* Get a read-only snapshot of instance counters and state. */
-loxbudget_status_t loxbudget_snapshot(const loxbudget_t *budget,
-                                     loxbudget_snapshot_t *out);
+loxbudget_status_t loxbudget_snapshot(const loxbudget_t* budget, loxbudget_snapshot_t* out);
 
 /* HAL API (weak symbols provided in src/loxbudget_hal.c, overridable via callbacks). */
 /* Time since boot in milliseconds (monotonic). */
@@ -316,7 +309,7 @@ loxbudget_bool_t loxbudget_hal_boot_proven(void);
 loxbudget_bool_t loxbudget_hal_voltage_ok(void);
 loxbudget_bool_t loxbudget_hal_network_up(void);
 /* Convenience callback table for permissive defaults (tests/minimal example). */
-const loxbudget_hal_callbacks_t *loxbudget_hal_default_permissive(void);
+const loxbudget_hal_callbacks_t* loxbudget_hal_default_permissive(void);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -21,32 +21,26 @@ static void test_init_invalid_args(void) {
   loxbudget_config_t cfg = cfg_default_();
   static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
 
-  assert(loxbudget_init(0, storage32, sizeof(storage32), &cfg) ==
-         LOXBUDGET_ERR_INVALID_ARG);
-  assert(loxbudget_init(&b, 0, sizeof(storage32), &cfg) ==
-         LOXBUDGET_ERR_INVALID_ARG);
+  assert(loxbudget_init(0, storage32, sizeof(storage32), &cfg) == LOXBUDGET_ERR_INVALID_ARG);
+  assert(loxbudget_init(&b, 0, sizeof(storage32), &cfg) == LOXBUDGET_ERR_INVALID_ARG);
   assert(loxbudget_init(&b, storage32, 0, &cfg) == LOXBUDGET_ERR_INVALID_ARG);
-  assert(loxbudget_init(&b, storage32, sizeof(storage32), 0) ==
-         LOXBUDGET_ERR_INVALID_ARG);
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), 0) == LOXBUDGET_ERR_INVALID_ARG);
 
   {
     static uint8_t storage8[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) + 1u];
-    assert(loxbudget_init(&b, (void *)(storage8 + 1u),
-                          LOXBUDGET_REQUIRED_SIZE(4, 8, 0), &cfg) ==
+    assert(loxbudget_init(&b, (void*)(storage8 + 1u), LOXBUDGET_REQUIRED_SIZE(4, 8, 0), &cfg) ==
            LOXBUDGET_ERR_ALIGNMENT);
   }
 
   {
     loxbudget_config_t bad = cfg;
     bad.max_resources = 0;
-    assert(loxbudget_init(&b, storage32, sizeof(storage32), &bad) ==
-           LOXBUDGET_ERR_INVALID_ARG);
+    assert(loxbudget_init(&b, storage32, sizeof(storage32), &bad) == LOXBUDGET_ERR_INVALID_ARG);
   }
   {
     loxbudget_config_t bad = cfg;
     bad.audit_size = 3;
-    assert(loxbudget_init(&b, storage32, sizeof(storage32), &bad) ==
-           LOXBUDGET_ERR_INVALID_ARG);
+    assert(loxbudget_init(&b, storage32, sizeof(storage32), &bad) == LOXBUDGET_ERR_INVALID_ARG);
   }
 }
 

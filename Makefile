@@ -5,6 +5,7 @@ CC ?= cc
 AR ?= ar
 
 CFLAGS ?= -std=c99 -Wall -Wextra -Werror -Iinclude
+LDFLAGS ?=
 
 LOXBUDGET_OBJS := $(BUILD_DIR)/loxbudget.o $(BUILD_DIR)/loxbudget_hal.o
 
@@ -31,7 +32,7 @@ $(BUILD_DIR)/test_v0_1.o: tests/test_v0_1.c include/loxbudget.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -Iinclude -c $< -o $@
 
 $(BUILD_DIR)/test_v0_1: $(BUILD_DIR)/test_v0_1.o $(BUILD_DIR)/libloxbudget.a
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
 banned: $(BUILD_DIR)/libloxbudget.a
 	@chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh || true
@@ -54,7 +55,7 @@ lint:
 
 example:
 	@chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh || true
-	@$(CC) $(CFLAGS) -Iinclude examples/01_bare_metal_minimal/main.c $(BUILD_DIR)/libloxbudget.a -o $(BUILD_DIR)/example_minimal
+	@$(CC) $(CFLAGS) $(LDFLAGS) -Iinclude examples/01_bare_metal_minimal/main.c $(BUILD_DIR)/libloxbudget.a -o $(BUILD_DIR)/example_minimal
 	@$(BUILD_DIR)/example_minimal
 
 cross: | $(BUILD_DIR)
