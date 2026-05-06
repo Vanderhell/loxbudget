@@ -3,7 +3,7 @@ project(loxbudget C)
 
 add_library(loxbudget STATIC)
 target_sources(loxbudget PRIVATE src/loxbudget_core.c src/loxbudget_audit.c
-                                 src/loxbudget_hal.c)
+                                 src/loxbudget_hal.c src/loxbudget_strings.c)
 target_include_directories(loxbudget PUBLIC include)
 
 add_executable(test_header_compiles tests/test_header_compiles.c)

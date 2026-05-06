@@ -7,7 +7,7 @@ AR ?= ar
 CFLAGS ?= -std=c99 -Wall -Wextra -Werror -Iinclude
 LDFLAGS ?=
 
-LOXBUDGET_OBJS := $(BUILD_DIR)/loxbudget_core.o $(BUILD_DIR)/loxbudget_audit.o $(BUILD_DIR)/loxbudget_hal.o
+LOXBUDGET_OBJS := $(BUILD_DIR)/loxbudget_core.o $(BUILD_DIR)/loxbudget_audit.o $(BUILD_DIR)/loxbudget_hal.o $(BUILD_DIR)/loxbudget_strings.o
 
 all: $(BUILD_DIR)/libloxbudget.a header-check
 
@@ -21,6 +21,9 @@ $(BUILD_DIR)/loxbudget_audit.o: src/loxbudget_audit.c include/loxbudget.h | $(BU
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/loxbudget_hal.o: src/loxbudget_hal.c include/loxbudget.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/loxbudget_strings.o: src/loxbudget_strings.c include/loxbudget.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/libloxbudget.a: $(LOXBUDGET_OBJS)

@@ -310,6 +310,31 @@ loxbudget_status_t loxbudget_audit_get_recent(const loxbudget_t* budget,
 loxbudget_status_t loxbudget_audit_clear(loxbudget_t* budget);
 #endif
 
+/* Optional diagnostic strings (V0.2+). */
+#if LOXBUDGET_ENABLE_DIAGNOSTIC_STRINGS
+const char* loxbudget_action_name(loxbudget_action_t a);
+const char* loxbudget_pressure_name(loxbudget_pressure_t p);
+const char* loxbudget_reason_name(loxbudget_reason_t r);
+const char* loxbudget_status_name(loxbudget_status_t s);
+#else
+static inline const char* loxbudget_action_name(loxbudget_action_t a) {
+  (void)a;
+  return NULL;
+}
+static inline const char* loxbudget_pressure_name(loxbudget_pressure_t p) {
+  (void)p;
+  return NULL;
+}
+static inline const char* loxbudget_reason_name(loxbudget_reason_t r) {
+  (void)r;
+  return NULL;
+}
+static inline const char* loxbudget_status_name(loxbudget_status_t s) {
+  (void)s;
+  return NULL;
+}
+#endif
+
 /* HAL API (weak symbols provided in src/loxbudget_hal.c, overridable via callbacks). */
 /* Time since boot in milliseconds (monotonic). */
 uint32_t loxbudget_hal_now_ms(void);

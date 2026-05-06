@@ -580,6 +580,24 @@ static void test_audit_basic(void) {
 }
 #endif
 
+static void test_strings_disabled(void) {
+#if !LOXBUDGET_ENABLE_DIAGNOSTIC_STRINGS
+  assert(loxbudget_action_name(LOXBUDGET_ALLOW_FULL) == NULL);
+  assert(loxbudget_pressure_name(LOXBUDGET_PRESSURE_NORMAL) == NULL);
+  assert(loxbudget_reason_name(LOXBUDGET_REASON_OK) == NULL);
+  assert(loxbudget_status_name(LOXBUDGET_OK) == NULL);
+#endif
+}
+
+static void test_strings_enabled(void) {
+#if LOXBUDGET_ENABLE_DIAGNOSTIC_STRINGS
+  assert(loxbudget_action_name(LOXBUDGET_ALLOW_FULL) != NULL);
+  assert(loxbudget_pressure_name(LOXBUDGET_PRESSURE_NORMAL) != NULL);
+  assert(loxbudget_reason_name(LOXBUDGET_REASON_OK) != NULL);
+  assert(loxbudget_status_name(LOXBUDGET_OK) != NULL);
+#endif
+}
+
 int main(void) {
   test_init_invalid_args();
   test_init_valid();
@@ -607,5 +625,7 @@ int main(void) {
 #if LOXBUDGET_ENABLE_AUDIT_TRAIL
   test_audit_basic();
 #endif
+  test_strings_disabled();
+  test_strings_enabled();
   return 0;
 }

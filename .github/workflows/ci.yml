@@ -68,3 +68,10 @@ jobs:
       - uses: actions/checkout@v4
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
       - run: make CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Werror -Iinclude -DLOXBUDGET_ENABLE_AUDIT_TRAIL=1" test
+
+  strings-enabled:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
+      - run: make CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Werror -Iinclude -DLOXBUDGET_ENABLE_DIAGNOSTIC_STRINGS=1" test
