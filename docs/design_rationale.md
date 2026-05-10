@@ -1,12 +1,12 @@
-# Design Rationale (V1.0)
+# Design rationale (V1.0)
 
-This is a short, user-facing summary pulled from `DESIGN.md`. If you're changing core logic or public API, read `DESIGN.md` in full.
+This is a short, user-facing rationale for the core design choices.
 
 ## What loxbudget is
 
 `loxbudget` answers one question:
 
-> can this operation safely run right now?
+> Can this operation safely run right now?
 
 It does that deterministically (bounded time, no hidden state) using:
 
@@ -17,7 +17,7 @@ It does that deterministically (bounded time, no hidden state) using:
 ## Core promises
 
 - No heap allocation
-- No floats (integer/fixed-point only)
+- No floats (integer / fixed-point only)
 - No global mutable state (library `.bss = 0`)
 - Bounded execution time for every public function
 - Feature gates compile out cleanly
@@ -32,8 +32,7 @@ Calibration exists to remove guesswork in configuring limits. It records percent
 
 ## Why adapters are separate
 
-Adapters integrate loxbudget with other libraries, but must remain optional and isolated:
+Adapters integrate loxbudget with other libraries, but remain optional and isolated:
 
 - no adapter symbols in core build
-- opt-in by linking the adapter TU
-
+- opt-in by linking the adapter translation unit

@@ -16,7 +16,7 @@ Generate `single_header/loxbudget.h`:
 
 - `python3 tools/amalgamate.py`
 
-Then compile with `-I./single_header` and define `LOXBUDGET_IMPLEMENTATION` in **exactly one** translation unit.
+Then compile with `-I./single_header` and define `LOXBUDGET_IMPLEMENTATION` in exactly one translation unit.
 
 Example:
 
@@ -28,15 +28,13 @@ Example:
 
 ## Tests
 
-With CMake, the repo builds these test executables:
+With CMake, the repo builds test executables such as:
 
 - `test_v0_1`
-- `test_microlog_adapter`
-- `test_microhealth_adapter`
-- `test_microconf_adapter`
-- `test_microbus_adapter`
-- `test_nvlog_adapter`
-- `test_loxguard_adapter`
+- `test_backward_compat_v0_3`
+- `test_determinism`
+- `test_calibration_disabled`
+- Adapter tests: `test_microlog_adapter`, `test_microhealth_adapter`, `test_microconf_adapter`, `test_microbus_adapter`, `test_nvlog_adapter`, `test_loxguard_adapter`
 
 ## Convenience init
 
@@ -47,6 +45,6 @@ For simple setups you can use:
 
 ## Convenience op profile
 
-If you just want a “normal priority, always allow full” baseline profile:
+If you just want a "normal priority, always allow full" baseline profile:
 
 - `loxbudget_op_profile_default(op_id)`
