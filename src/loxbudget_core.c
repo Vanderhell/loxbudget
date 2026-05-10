@@ -863,6 +863,9 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
   {
     const loxbudget_need_t* list =
         &loxbudget_needs_c_(budget)[(uint32_t)op * LOXBUDGET_MAX_NEEDS_PER_OP];
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+    const uint32_t now_ms = loxbudget_hal_now_ms_(budget);
+#endif
     uint16_t need_per_res[LOXBUDGET_MAX_RESOURCES];
     memset(need_per_res, 0, sizeof(need_per_res));
     uint8_t i;
