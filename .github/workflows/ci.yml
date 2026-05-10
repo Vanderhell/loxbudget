@@ -8,7 +8,7 @@ jobs:
   gcc-host:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
       - run: make all
       - run: make test
@@ -29,7 +29,7 @@ jobs:
   clang-host:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: sudo apt-get update
       - run: sudo apt-get install -y clang
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
@@ -39,7 +39,7 @@ jobs:
   arm-none-eabi-cross:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: sudo apt-get update
       - run: sudo apt-get install -y gcc-arm-none-eabi
       - run: chmod +x tools/footprint_check.sh
@@ -53,7 +53,7 @@ jobs:
   format-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: sudo apt-get update
       - run: sudo apt-get install -y clang-format
       - run: clang-format --dry-run -Werror include/loxbudget.h src/loxbudget_core.c src/loxbudget_audit.c src/loxbudget_hal.c src/loxbudget_strings.c src/loxbudget_calibration.c tests/test_header_compiles.c tests/test_v0_1.c tests/test_backward_compat_v0_3.c tests/test_determinism.c tests/test_calibration_disabled.c tests/test_microlog_adapter.c tests/test_microhealth_adapter.c tests/test_microconf_adapter.c tests/test_microbus_adapter.c tests/test_nvlog_adapter.c tests/test_loxguard_adapter.c tests/single_header_impl.c adapters/microlog/loxbudget_microlog_adapter.c adapters/microlog/loxbudget_microlog_adapter.h adapters/microhealth/loxbudget_microhealth_adapter.c adapters/microhealth/loxbudget_microhealth_adapter.h adapters/microconf/loxbudget_microconf_adapter.c adapters/microconf/loxbudget_microconf_adapter.h adapters/microbus/loxbudget_microbus_adapter.c adapters/microbus/loxbudget_microbus_adapter.h adapters/nvlog/loxbudget_nvlog_adapter.c adapters/nvlog/loxbudget_nvlog_adapter.h adapters/loxguard/loxbudget_loxguard_adapter.c adapters/loxguard/loxbudget_loxguard_adapter.h examples/01_bare_metal_minimal/main.c examples/02_freertos_mqtt_storm/main.c examples/03_esp_idf_flash_budget/main.c tests/integration/test_flash_burnout.c tests/integration/test_mqtt_storm.c tests/integration/test_ota_blocked.c
@@ -61,7 +61,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: sudo apt-get update
       - run: sudo apt-get install -y clang-tidy clang
       - run: cmake -S . -B build_tidy -DCMAKE_C_COMPILER=clang -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
@@ -70,7 +70,7 @@ jobs:
   sanitizers:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: sudo apt-get update
       - run: sudo apt-get install -y clang
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
@@ -79,7 +79,7 @@ jobs:
   fuzz-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: sudo apt-get update
       - run: sudo apt-get install -y clang
       - run: mkdir -p build_fuzz
@@ -91,42 +91,42 @@ jobs:
   audit-enabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
       - run: make CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Werror -Iinclude -DLOXBUDGET_ENABLE_AUDIT_TRAIL=1" test
 
   strings-enabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
       - run: make CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Werror -Iinclude -DLOXBUDGET_ENABLE_DIAGNOSTIC_STRINGS=1" test
 
   rate-enabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
       - run: make CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Werror -Iinclude -DLOXBUDGET_ENABLE_RATE_WINDOWS=1" test
 
   integration:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
       - run: make CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Werror -Iinclude -DLOXBUDGET_ENABLE_RATE_WINDOWS=1 -DLOXBUDGET_ENABLE_AUDIT_TRAIL=1" integration
 
   token-bucket:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
       - run: make CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Werror -Iinclude -DLOXBUDGET_ENABLE_RATE_WINDOWS=1 -DLOXBUDGET_RATE_IMPL=2" test
 
   coverage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: sudo apt-get update
       - run: sudo apt-get install -y lcov
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
@@ -139,14 +139,14 @@ jobs:
   calibration-enabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
       - run: make CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Werror -Iinclude -DLOXBUDGET_ENABLE_CALIBRATION=1" test
 
   single-header:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: python3 tools/amalgamate.py
       - run: mkdir -p build
       - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header -c tests/single_header_impl.c -o build/loxbudget_single_header_impl.o
