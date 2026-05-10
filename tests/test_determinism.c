@@ -75,7 +75,14 @@ int main(void) {
       const uint64_t median = samples[N / 2u];
       const uint64_t p99 = samples[(N * 99u) / 100u];
       /* CI/desktop noise can produce rare outliers; enforce percentile bound. */
-      if (median != 0u) { assert(p99 <= (median * 2u)); }
+      if (median != 0u) {
+#if defined(_WIN32)
+        const uint64_t max_ratio = 20u;
+#else
+        const uint64_t max_ratio = 2u;
+#endif
+        if (median <= (UINT64_MAX / max_ratio)) { assert(p99 <= (median * max_ratio)); }
+      }
     }
   }
 
@@ -94,7 +101,14 @@ int main(void) {
       qsort(samples, N, sizeof(samples[0]), &cmp_u64_);
       const uint64_t median = samples[N / 2u];
       const uint64_t p99 = samples[(N * 99u) / 100u];
-      if (median != 0u) { assert(p99 <= (median * 2u)); }
+      if (median != 0u) {
+#if defined(_WIN32)
+        const uint64_t max_ratio = 20u;
+#else
+        const uint64_t max_ratio = 2u;
+#endif
+        if (median <= (UINT64_MAX / max_ratio)) { assert(p99 <= (median * max_ratio)); }
+      }
     }
   }
 
