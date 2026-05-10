@@ -4,8 +4,8 @@
 
 Core requires:
 
-- `now_ms`: monotonic milliseconds since boot (needed for audit/rate/calibration time bases).
-- critical section enter/exit: required for atomic `enter/leave` on systems with preemption.
+- `now_ms`: monotonic milliseconds since boot (used for audit/rate/calibration time bases).
+- Critical section enter/exit: required for correct `enter/leave` on systems with preemption or interrupts.
 
 See:
 
@@ -21,3 +21,7 @@ See:
   - `now_ms` from RTOS tick count.
   - critical section from scheduler lock or mutex (must be bounded).
 
+## Guidance
+
+- Keep critical sections short and bounded. `enter/leave` should not be blocked behind unbounded locks.
+- Ensure `now_ms` is monotonic (never goes backwards). If your platform can sleep, prefer an uptime counter that continues across sleep or document the behavior.

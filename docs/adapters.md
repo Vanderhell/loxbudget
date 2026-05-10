@@ -2,6 +2,12 @@
 
 Adapters are optional integration modules. They are separate translation units and never required by core `loxbudget`.
 
+## How to use an adapter
+
+- Include the adapter header (for example `adapters/nvlog/loxbudget_nvlog_adapter.h`).
+- Compile and link the corresponding `*_adapter.c` file into your firmware (opt-in).
+- Provide the external symbols the adapter expects (documented in the header and summarized below).
+
 ## microlog
 
 - Header: `adapters/microlog/loxbudget_microlog_adapter.h`
@@ -42,4 +48,3 @@ Adapters are optional integration modules. They are separate translation units a
 - User must provide:
   - `loxguard_push()`
   - `loxguard_flush()`
-

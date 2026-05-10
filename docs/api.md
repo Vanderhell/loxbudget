@@ -2,6 +2,40 @@
 
 This document summarizes the public API declared in `include/loxbudget.h`.
 
+## Contract (what you can rely on)
+
+- Deterministic decisions: `check/enter/leave` do not consult hidden global state (all state lives in the `loxbudget_t` instance).
+- No heap allocation: the library never calls `malloc/new`.
+- No floating point: integer / fixed-point only.
+- Bounded work per call: all public calls are intended to be bounded-time.
+
+## Concurrency and thread-safety
+
+`loxbudget` is designed for embedded firmware. It is safe to use from multiple contexts only if you provide a bounded critical section via the HAL (see `docs/porting.md`). In other words:
+
+- If `enter/leave` can be called concurrently (preemption/interrupts), you must ensure the critical section callbacks are correct for your platform.
+- `check()` is read-mostly, but still operates on shared instance state (do not assume it is lock-free).
+
+## Feature gating (compile-time options)
+
+Optional features compile out when disabled:
+
+- `LOXBUDGET_ENABLE_AUDIT_TRAIL`
+- `LOXBUDGET_ENABLE_DIAGNOSTIC_STRINGS`
+- `LOXBUDGET_ENABLE_RATE_WINDOWS`
+- `LOXBUDGET_ENABLE_CALIBRATION`
+- `LOXBUDGET_ENABLE_CAUSALITY`
+
+## Typical call flow
+
+1. Initialize into caller-provided storage: `loxbudget_init()` (or `loxbudget_init_simple()`).
+2. Declare resources: `loxbudget_set_resource()`.
+3. Register operations and their profiles: `loxbudget_register_op()`.
+4. Configure needs per operation: `loxbudget_op_set_need()`.
+5. Before running an operation:
+   - call `loxbudget_check()` to get a decision, then
+   - call `loxbudget_enter()` / `loxbudget_leave()` to account a lease when you actually run it.
+
 ## Core types
 
 - `loxbudget_status_t`
@@ -108,3 +142,7 @@ Weak/overridable symbols:
 Callback helper:
 
 - `loxbudget_hal_default_permissive()`
+
+Notes:
+
+- If you do not override the weak symbols, the defaults are permissive (intended for host tests / bring-up, not a hardened production platform).
