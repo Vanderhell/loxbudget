@@ -55,4 +55,3 @@ int main(void) {
   assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
   return 0;
 }
-

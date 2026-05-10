@@ -5,8 +5,8 @@
 /* Optional causality helper implemented in src/loxbudget_causality.c. */
 #if LOXBUDGET_ENABLE_CAUSALITY
 uint32_t lb__causality_add_scaled_needs_(loxbudget_t* budget, loxbudget_op_id_t root_op,
-                                        uint16_t* io_need_per_resource,
-                                        loxbudget_pressure_t pressure);
+                                         uint16_t* io_need_per_resource,
+                                         loxbudget_pressure_t pressure);
 #endif
 
 /* Internal constants */
@@ -863,7 +863,6 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
   {
     const loxbudget_need_t* list =
         &loxbudget_needs_c_(budget)[(uint32_t)op * LOXBUDGET_MAX_NEEDS_PER_OP];
-    const uint32_t now_ms = loxbudget_hal_now_ms_(budget);
     uint16_t need_per_res[LOXBUDGET_MAX_RESOURCES];
     memset(need_per_res, 0, sizeof(need_per_res));
     uint8_t i;
@@ -1015,9 +1014,9 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
             out->requested = req;
             out->available = avail;
             out->reason = (uint8_t)LOXBUDGET_REASON_CAUSAL_CASCADE;
-            out->action =
-                ((loxbudget_resource_kind_t)r->kind == LOXBUDGET_RES_REUSABLE) ? LOXBUDGET_WAIT
-                                                                              : LOXBUDGET_REJECT;
+            out->action = ((loxbudget_resource_kind_t)r->kind == LOXBUDGET_RES_REUSABLE)
+                              ? LOXBUDGET_WAIT
+                              : LOXBUDGET_REJECT;
             budget->total_decisions++;
             budget->total_denials++;
             loxbudget_audit_record_(budget, op, out);

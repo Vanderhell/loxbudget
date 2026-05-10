@@ -402,8 +402,7 @@ typedef enum {
 } loxbudget_trigger_kind_t;
 
 loxbudget_status_t loxbudget_op_may_trigger(loxbudget_t* budget, loxbudget_op_id_t parent,
-                                            loxbudget_op_id_t child,
-                                            loxbudget_trigger_kind_t kind);
+                                            loxbudget_op_id_t child, loxbudget_trigger_kind_t kind);
 uint16_t loxbudget_causality_edge_count(const loxbudget_t* budget);
 #else
 typedef enum {
