@@ -7,7 +7,7 @@
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
 
 int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
-  static uint8_t storage[LOXBUDGET_REQUIRED_SIZE(4, 8, 0)];
+  static uint32_t storage[(LOXBUDGET_REQUIRED_SIZE(4, 8, 0) + 3u) / 4u];
   loxbudget_t b;
   loxbudget_config_t cfg;
   loxbudget_op_profile_t p;
@@ -47,4 +47,3 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
 }
 
 #endif
-

@@ -22,11 +22,7 @@ static const loxbudget_hal_callbacks_t* demo_hal_(uint32_t* t) {
 }
 
 static loxbudget_op_profile_t profile_(loxbudget_op_id_t id) {
-  loxbudget_op_profile_t p;
-  memset(&p, 0, sizeof(p));
-  p.op_id = id;
-  p.priority = LOXBUDGET_PRIO_NORMAL;
-  p.action_normal = LOXBUDGET_ALLOW_FULL;
+  loxbudget_op_profile_t p = loxbudget_op_profile_default(id);
   p.action_elevated = LOXBUDGET_ALLOW_DEGRADED;
   p.action_critical = LOXBUDGET_WAIT;
   p.action_survival = LOXBUDGET_REJECT;
@@ -35,19 +31,15 @@ static loxbudget_op_profile_t profile_(loxbudget_op_id_t id) {
 }
 
 int main(void) {
-  static uint8_t storage[LOXBUDGET_REQUIRED_SIZE(2, 2, 32)];
+  static uint32_t storage[(LOXBUDGET_REQUIRED_SIZE(2, 2, 32) + 3u) / 4u];
   uint32_t t = 0;
   loxbudget_t b;
-  loxbudget_config_t cfg;
   loxbudget_op_profile_t mqtt_pub = profile_(0);
   loxbudget_decision_t d;
 
-  memset(&cfg, 0, sizeof(cfg));
-  cfg.max_resources = 2;
-  cfg.max_ops = 2;
+  loxbudget_config_t cfg = loxbudget_config_simple(2, 2);
   cfg.max_concurrent_leases = 2;
   cfg.audit_size = 32;
-  cfg.hal_strict = 0;
   cfg.hal_callbacks = demo_hal_(&t);
   cfg.hal_user = &t;
 

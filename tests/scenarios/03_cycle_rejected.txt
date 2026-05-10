@@ -1,0 +1,12 @@
+# Cycle is rejected at registration time
+init 1 4
+resource 0 100 REUSABLE
+op 0
+op 1
+op 2
+edge 0 1 ALWAYS
+edge 1 2 ALWAYS
+expect_edge_count 2
+expect_edge 2 0 ALWAYS status=ERR_BAD_STATE
+expect_edge_count 2
+

@@ -1,5 +1,6 @@
 build/
 build_*/
+single_header/
 *.o
 *.obj
 *.a
@@ -17,4 +18,3 @@ build_*/
 *.suo
 *.swp
 *.tmp
-

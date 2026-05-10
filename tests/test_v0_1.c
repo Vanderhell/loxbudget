@@ -50,7 +50,8 @@ static void test_init_invalid_args(void) {
 
 static void test_init_valid(void) {
   loxbudget_t b;
-  loxbudget_config_t cfg = cfg_default_();
+  loxbudget_config_t cfg = loxbudget_config_simple(4, 8);
+  cfg.max_concurrent_leases = 4;
   static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
   loxbudget_snapshot_t snap;
 
@@ -800,6 +801,9 @@ static void test_calibration_basic(void) {
   loxbudget_op_profile_t p = profile_allow_(0);
   loxbudget_sample_t s;
   loxbudget_suggested_profile_t out;
+  size_t export_size = 0u;
+  uint8_t export_buf[512];
+  size_t written = 0u;
 
   assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
   assert(loxbudget_register_op(&b, &p) == LOXBUDGET_OK);
@@ -811,9 +815,122 @@ static void test_calibration_basic(void) {
     s.duration_us = (uint32_t)(1000u + i);
     assert(loxbudget_calibrate_sample(&b, 0, &s) == LOXBUDGET_OK);
   }
+
+  assert(loxbudget_calibration_export_size(&b, &export_size) == LOXBUDGET_OK);
+  assert(export_size >= 44u); /* header + 1 record */
+  assert(export_size <= sizeof(export_buf));
+  assert(loxbudget_calibration_export(&b, export_buf, sizeof(export_buf), &written) ==
+         LOXBUDGET_OK);
+  assert(written == export_size);
+  /* header: ver=2, record_count=1 */
+  assert(export_buf[0] == 2u);
+  assert(export_buf[1] == 1u);
+  /* record: op_id=0, active flag set */
+  assert(export_buf[4] == 0u);
+  assert((export_buf[5] & 1u) != 0u);
+  /* record: sample_count (u32 LE at +28), target_samples (u32 LE at +36) */
+  {
+    const uint32_t samples = (uint32_t)export_buf[32] | ((uint32_t)export_buf[33] << 8u) |
+                             ((uint32_t)export_buf[34] << 16u) | ((uint32_t)export_buf[35] << 24u);
+    const uint32_t target = (uint32_t)export_buf[40] | ((uint32_t)export_buf[41] << 8u) |
+                            ((uint32_t)export_buf[42] << 16u) | ((uint32_t)export_buf[43] << 24u);
+    assert(samples == 10u);
+    assert(target == 10u);
+  }
+
   assert(loxbudget_calibrate_end(&b, 0, &out) == LOXBUDGET_OK);
   assert(out.sample_count == 10u);
   assert(out.suggested_ram_limit >= out.ram_max);
+  assert(out.suggested_ram_limit >= out.ram_p99);
+
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+
+static uint32_t rng32_(uint32_t* s) {
+  /* xorshift32 */
+  uint32_t x = *s;
+  x ^= x << 13;
+  x ^= x >> 17;
+  x ^= x << 5;
+  *s = x;
+  return x;
+}
+
+static void test_calibration_p99_accuracy_uniform(void) {
+  /* Uniform [0, 999] has analytical p99 ~ 989..990 depending on definition. We allow slack. */
+  loxbudget_t b;
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
+  loxbudget_op_profile_t p = profile_allow_(0);
+  loxbudget_sample_t s;
+  loxbudget_suggested_profile_t out;
+
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_register_op(&b, &p) == LOXBUDGET_OK);
+
+  assert(loxbudget_calibrate_begin(&b, 0, 2000) == LOXBUDGET_OK);
+  memset(&s, 0, sizeof(s));
+
+  uint32_t seed = 0x12345678u;
+  for (uint32_t i = 0; i < 2000u; i++) {
+    const uint32_t r = rng32_(&seed);
+    s.ram_used = (uint16_t)(r % 1000u);
+    s.duration_us = (uint32_t)(r % 50000u);
+    assert(loxbudget_calibrate_sample(&b, 0, &s) == LOXBUDGET_OK);
+  }
+
+  assert(loxbudget_calibrate_end(&b, 0, &out) == LOXBUDGET_OK);
+  assert(out.sample_count == 2000u);
+  /* Loose bounds: expect near upper tail. */
+  assert(out.ram_p99 >= 900u);
+  assert(out.ram_p99 <= 999u);
+  assert(out.suggested_ram_limit >= out.ram_p99);
+
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+
+static void test_calibration_outlier_detection(void) {
+  loxbudget_t b;
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
+  loxbudget_op_profile_t p = profile_allow_(0);
+  loxbudget_sample_t s;
+  loxbudget_suggested_profile_t out;
+
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_register_op(&b, &p) == LOXBUDGET_OK);
+
+  assert(loxbudget_calibrate_begin(&b, 0, 1000) == LOXBUDGET_OK);
+  memset(&s, 0, sizeof(s));
+
+  /* Baseline RAM around 100, with a few huge spikes that should trip p99*1.5 once p99 settles. */
+  for (uint32_t i = 0; i < 1000u; i++) {
+    s.ram_used = 100u;
+    s.duration_us = 1000u;
+    if (i == 200u || i == 500u || i == 800u) { s.ram_used = 1000u; }
+    assert(loxbudget_calibrate_sample(&b, 0, &s) == LOXBUDGET_OK);
+  }
+
+  assert(loxbudget_calibrate_end(&b, 0, &out) == LOXBUDGET_OK);
+  assert(out.sample_count == 1000u);
+  /* Outlier heuristic is intentionally simple; require that at least one spike is detected. */
+  assert(out.ram_max == 1000u);
+  assert(out.outlier_count > 0u);
+
+  assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
+}
+
+static void test_calibration_no_double_begin(void) {
+  loxbudget_t b;
+  loxbudget_config_t cfg = cfg_default_();
+  static uint32_t storage32[LOXBUDGET_REQUIRED_SIZE(4, 8, 0) / 4u];
+  loxbudget_op_profile_t p = profile_allow_(0);
+
+  assert(loxbudget_init(&b, storage32, sizeof(storage32), &cfg) == LOXBUDGET_OK);
+  assert(loxbudget_register_op(&b, &p) == LOXBUDGET_OK);
+
+  assert(loxbudget_calibrate_begin(&b, 0, 10) == LOXBUDGET_OK);
+  assert(loxbudget_calibrate_begin(&b, 0, 10) == LOXBUDGET_ERR_BAD_STATE);
 
   assert(loxbudget_deinit(&b) == LOXBUDGET_OK);
 }
@@ -860,6 +977,9 @@ int main(void) {
 #endif
 #if LOXBUDGET_ENABLE_CALIBRATION
   test_calibration_basic();
+  test_calibration_p99_accuracy_uniform();
+  test_calibration_outlier_detection();
+  test_calibration_no_double_begin();
 #endif
   return 0;
 }

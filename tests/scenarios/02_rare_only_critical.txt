@@ -1,0 +1,13 @@
+# RARE edges only count at CRITICAL+
+init 1 3
+resource 0 10 REUSABLE
+op 0
+op 1
+need 0 0 6
+need 1 0 50
+edge 0 1 RARE
+pressure NORMAL
+expect_check 0 ALLOW_FULL reason=OK
+pressure CRITICAL
+expect_check 0 WAIT reason=CAUSAL_CASCADE
+

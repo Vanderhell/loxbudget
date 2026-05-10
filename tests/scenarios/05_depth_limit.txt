@@ -1,0 +1,22 @@
+# Depth limit: nodes beyond LOXBUDGET_CAUSALITY_MAX_DEPTH are ignored
+# Default LOXBUDGET_CAUSALITY_MAX_DEPTH is 3.
+init 1 6
+resource 0 100 REUSABLE
+op 0
+op 1
+op 2
+op 3
+op 4
+need 0 0 1
+need 1 0 1
+need 2 0 1
+need 3 0 1
+need 4 0 200
+edge 0 1 ALWAYS
+edge 1 2 ALWAYS
+edge 2 3 ALWAYS
+edge 3 4 ALWAYS
+pressure NORMAL
+# op4 is at depth 4 from op0, so it should not contribute and check should still pass.
+expect_check 0 ALLOW_FULL reason=OK
+

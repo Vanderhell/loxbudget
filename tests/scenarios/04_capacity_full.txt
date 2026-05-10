@@ -1,0 +1,16 @@
+# Edge capacity enforced (scenario_runner builds with LOXBUDGET_CAUSALITY_MAX_EDGES=4)
+init 1 6
+resource 0 100 REUSABLE
+op 0
+op 1
+op 2
+op 3
+op 4
+edge 0 1 ALWAYS
+edge 0 2 ALWAYS
+edge 0 3 ALWAYS
+edge 0 4 ALWAYS
+expect_edge_count 4
+expect_edge 1 2 ALWAYS status=ERR_NO_SPACE
+expect_edge_count 4
+

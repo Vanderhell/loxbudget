@@ -4,12 +4,7 @@
 
 /* Host-only compile demo: model flash writes as a CONSUMABLE resource. */
 static loxbudget_op_profile_t profile_(loxbudget_op_id_t id) {
-  loxbudget_op_profile_t p;
-  memset(&p, 0, sizeof(p));
-  p.op_id = id;
-  p.priority = LOXBUDGET_PRIO_NORMAL;
-  p.action_normal = LOXBUDGET_ALLOW_FULL;
-  p.action_elevated = LOXBUDGET_ALLOW_FULL;
+  loxbudget_op_profile_t p = loxbudget_op_profile_default(id);
   p.action_critical = LOXBUDGET_ALLOW_DEGRADED;
   p.action_survival = LOXBUDGET_REJECT;
   p.action_lockdown = LOXBUDGET_LOCKDOWN;
@@ -17,19 +12,14 @@ static loxbudget_op_profile_t profile_(loxbudget_op_id_t id) {
 }
 
 int main(void) {
-  static uint8_t storage[LOXBUDGET_REQUIRED_SIZE(2, 2, 32)];
+  static uint32_t storage[(LOXBUDGET_REQUIRED_SIZE(2, 2, 32) + 3u) / 4u];
   loxbudget_t b;
-  loxbudget_config_t cfg;
   loxbudget_op_profile_t ota = profile_(0);
   loxbudget_lease_t lease;
 
-  memset(&cfg, 0, sizeof(cfg));
-  cfg.max_resources = 2;
-  cfg.max_ops = 2;
+  loxbudget_config_t cfg = loxbudget_config_simple(2, 2);
   cfg.max_concurrent_leases = 1;
   cfg.audit_size = 32;
-  cfg.hal_strict = 0;
-  cfg.hal_callbacks = loxbudget_hal_default_permissive();
 
   if (loxbudget_init(&b, storage, sizeof(storage), &cfg) != LOXBUDGET_OK) return 1;
 

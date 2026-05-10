@@ -2,6 +2,13 @@
 
 #include <string.h>
 
+/* Optional causality helper implemented in src/loxbudget_causality.c. */
+#if LOXBUDGET_ENABLE_CAUSALITY
+uint32_t lb__causality_add_scaled_needs_(loxbudget_t* budget, loxbudget_op_id_t root_op,
+                                        uint16_t* io_need_per_resource,
+                                        loxbudget_pressure_t pressure);
+#endif
+
 /* Internal constants */
 #define LOXBUDGET_MAGIC_INIT 0x4C58424Du /* 'LXBM' */
 
@@ -69,9 +76,15 @@ static const loxbudget_lease_slot_t* loxbudget_lease_slots_c_(const loxbudget_t*
 static loxbudget_decision_record_t* loxbudget_audit_buf_(loxbudget_t* b) {
   return (loxbudget_decision_record_t*)(b->storage + b->audit_off);
 }
-static const loxbudget_decision_record_t* loxbudget_audit_buf_c_(const loxbudget_t* b) {
+#if defined(__GNUC__) || defined(__clang__)
+#define LB__UNUSED __attribute__((unused))
+#else
+#define LB__UNUSED
+#endif
+static LB__UNUSED const loxbudget_decision_record_t* loxbudget_audit_buf_c_(const loxbudget_t* b) {
   return (const loxbudget_decision_record_t*)(b->storage + b->audit_off);
 }
+#undef LB__UNUSED
 
 #if LOXBUDGET_ENABLE_RATE_WINDOWS
 typedef struct {
@@ -334,6 +347,14 @@ loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t sto
     off = LOXBUDGET_ALIGN_UP(off, align);
 #endif
 
+#if LOXBUDGET_ENABLE_CAUSALITY
+    /* Causality tables: header + fixed edge array + visited bitmap. */
+    off += 4u; /* lb__causality_hdr_t */
+    off += (uint32_t)LOXBUDGET_CAUSALITY_MAX_EDGES * 4u;
+    off += ((uint32_t)budget->max_ops + 7u) / 8u;
+    off = LOXBUDGET_ALIGN_UP(off, align);
+#endif
+
     /* Alignment slack. */
     off += 16u;
 
@@ -360,6 +381,47 @@ loxbudget_status_t loxbudget_init(loxbudget_t* budget, void* storage, size_t sto
 
 #if LOXBUDGET_ENABLE_RATE_WINDOWS
   memset(lb__rate_state_(budget), 0, (size_t)budget->max_resources * sizeof(lb__rate_state_t));
+#endif
+
+#if LOXBUDGET_ENABLE_CALIBRATION
+  if (budget->calib_off != 0u) {
+    memset((budget->storage + budget->calib_off), 0,
+           (size_t)budget->max_ops * (size_t)LOXBUDGET_CALIB_STATE_SIZE);
+  }
+#endif
+
+#if LOXBUDGET_ENABLE_CAUSALITY
+  {
+    /* Clear causality block (layout must match src/loxbudget_causality.c). */
+    uint32_t off = 0u;
+    off += (uint32_t)sizeof(loxbudget_storage_hdr_t);
+    off = LOXBUDGET_ALIGN_UP(off, 4u);
+    off += (uint32_t)budget->max_resources * (uint32_t)sizeof(loxbudget_resource_t);
+    off = LOXBUDGET_ALIGN_UP(off, 4u);
+    off += (uint32_t)budget->max_ops * (uint32_t)sizeof(loxbudget_op_profile_t);
+    off = LOXBUDGET_ALIGN_UP(off, 4u);
+    off += (uint32_t)budget->max_ops * (uint32_t)LOXBUDGET_MAX_NEEDS_PER_OP *
+           (uint32_t)sizeof(loxbudget_need_t);
+    off = LOXBUDGET_ALIGN_UP(off, 4u);
+    off += (uint32_t)budget->max_leases * (uint32_t)sizeof(loxbudget_lease_slot_t);
+    off = LOXBUDGET_ALIGN_UP(off, 4u);
+    off += (uint32_t)budget->audit_size * (uint32_t)sizeof(loxbudget_decision_record_t);
+    off = LOXBUDGET_ALIGN_UP(off, 4u);
+#if LOXBUDGET_ENABLE_RATE_WINDOWS
+    off += (uint32_t)budget->max_resources * (uint32_t)sizeof(lb__rate_state_t);
+    off = LOXBUDGET_ALIGN_UP(off, 4u);
+#endif
+#if LOXBUDGET_ENABLE_CALIBRATION
+    off += (uint32_t)budget->max_ops * (uint32_t)LOXBUDGET_CALIB_STATE_SIZE;
+    off = LOXBUDGET_ALIGN_UP(off, 4u);
+#endif
+
+    {
+      const uint32_t nbytes = 4u + (uint32_t)LOXBUDGET_CAUSALITY_MAX_EDGES * 4u +
+                              (((uint32_t)budget->max_ops + 7u) / 8u);
+      memset(budget->storage + off, 0, (size_t)nbytes);
+    }
+  }
 #endif
 
   /* Initialize per-instance lease magic base. */
@@ -802,6 +864,8 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
     const loxbudget_need_t* list =
         &loxbudget_needs_c_(budget)[(uint32_t)op * LOXBUDGET_MAX_NEEDS_PER_OP];
     const uint32_t now_ms = loxbudget_hal_now_ms_(budget);
+    uint16_t need_per_res[LOXBUDGET_MAX_RESOURCES];
+    memset(need_per_res, 0, sizeof(need_per_res));
     uint8_t i;
     for (i = 0u; i < LOXBUDGET_MAX_NEEDS_PER_OP; i++) {
       const loxbudget_need_t n = list[i];
@@ -839,6 +903,12 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
           return LOXBUDGET_OK;
         }
         continue;
+      }
+
+      {
+        uint32_t sum = (uint32_t)need_per_res[n.resource] + (uint32_t)n.amount;
+        if (sum > 0xFFFFu) sum = 0xFFFFu;
+        need_per_res[n.resource] = (uint16_t)sum;
       }
 
       const uint16_t avail = loxbudget_available_u16_(r->limit, r->used, r->reserved);
@@ -909,6 +979,57 @@ loxbudget_status_t loxbudget_check(loxbudget_t* budget, loxbudget_op_id_t op,
       }
 #endif
     }
+
+#if LOXBUDGET_ENABLE_CAUSALITY
+    /* Transitive cascade check (SPEC.md §17). */
+    if (lb__causality_add_scaled_needs_(budget, op, need_per_res,
+                                        (loxbudget_pressure_t)budget->pressure) != 0u) {
+      uint8_t rid;
+      for (rid = 0u; rid < budget->max_resources; rid++) {
+        const uint16_t req = need_per_res[rid];
+        if (req == 0u) continue;
+        if (loxbudget_hdr_c_(budget)->res_cfg[rid] == 0u) continue;
+        const loxbudget_resource_t* r = &loxbudget_resources_c_(budget)[rid];
+        if ((loxbudget_resource_kind_t)r->kind == LOXBUDGET_RES_STATE) {
+          if (r->limit == 0u) {
+            out->action = LOXBUDGET_REJECT;
+            out->reason = (uint8_t)LOXBUDGET_REASON_CAUSAL_CASCADE;
+            out->denied_resource = (loxbudget_resource_id_t)rid;
+            out->requested = req;
+            out->available = 0u;
+            budget->total_decisions++;
+            budget->total_denials++;
+            loxbudget_audit_record_(budget, op, out);
+            if (budget->decision_hook != NULL) {
+              budget->decision_hook(budget->decision_hook_user, out, op);
+            }
+            return LOXBUDGET_OK;
+          }
+          continue;
+        }
+
+        {
+          const uint16_t avail = loxbudget_available_u16_(r->limit, r->used, r->reserved);
+          if (avail < req) {
+            out->denied_resource = (loxbudget_resource_id_t)rid;
+            out->requested = req;
+            out->available = avail;
+            out->reason = (uint8_t)LOXBUDGET_REASON_CAUSAL_CASCADE;
+            out->action =
+                ((loxbudget_resource_kind_t)r->kind == LOXBUDGET_RES_REUSABLE) ? LOXBUDGET_WAIT
+                                                                              : LOXBUDGET_REJECT;
+            budget->total_decisions++;
+            budget->total_denials++;
+            loxbudget_audit_record_(budget, op, out);
+            if (budget->decision_hook != NULL) {
+              budget->decision_hook(budget->decision_hook_user, out, op);
+            }
+            return LOXBUDGET_OK;
+          }
+        }
+      }
+    }
+#endif
   }
 
   out->reason = (uint8_t)LOXBUDGET_REASON_OK;

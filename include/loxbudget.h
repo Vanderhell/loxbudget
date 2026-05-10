@@ -44,6 +44,14 @@ extern "C" {
 #define LOXBUDGET_ENABLE_CAUSALITY 0
 #endif
 
+#ifndef LOXBUDGET_CAUSALITY_MAX_EDGES
+#define LOXBUDGET_CAUSALITY_MAX_EDGES 32
+#endif
+
+#ifndef LOXBUDGET_CAUSALITY_MAX_DEPTH
+#define LOXBUDGET_CAUSALITY_MAX_DEPTH 3
+#endif
+
 #ifndef LOXBUDGET_ENABLE_DIAGNOSTIC_STRINGS
 #define LOXBUDGET_ENABLE_DIAGNOSTIC_STRINGS 0
 #endif
@@ -323,6 +331,9 @@ typedef struct {
    (uint32_t)LOXBUDGET_MAX_LEASES * 8u +                                                           \
    ((LOXBUDGET_ENABLE_RATE_WINDOWS != 0) ? ((uint32_t)(n_res) * 72u) : 0u) +                       \
    ((LOXBUDGET_ENABLE_CALIBRATION != 0) ? ((uint32_t)(n_ops) * LOXBUDGET_CALIB_STATE_SIZE) : 0u) + \
+   ((LOXBUDGET_ENABLE_CAUSALITY != 0)                                                              \
+        ? (4u + (uint32_t)LOXBUDGET_CAUSALITY_MAX_EDGES * 4u + (((uint32_t)(n_ops) + 7u) / 8u))    \
+        : 0u) +                                                                                    \
    (uint32_t)(audit_n) * 16u + 16u)
 
 /* Core API (V0.1). */
@@ -381,6 +392,43 @@ loxbudget_status_t loxbudget_get_burn_rate(const loxbudget_t* budget, loxbudget_
 loxbudget_status_t loxbudget_yield_check(loxbudget_t* budget, loxbudget_lease_t lease,
                                          loxbudget_pressure_hint_t* out);
 
+/* Causality tracking (optional, V1.1). */
+#if LOXBUDGET_ENABLE_CAUSALITY
+typedef enum {
+  LOXBUDGET_TRIGGER_NEVER = 0,
+  LOXBUDGET_TRIGGER_RARE = 32,
+  LOXBUDGET_TRIGGER_MAYBE = 128,
+  LOXBUDGET_TRIGGER_ALWAYS = 255
+} loxbudget_trigger_kind_t;
+
+loxbudget_status_t loxbudget_op_may_trigger(loxbudget_t* budget, loxbudget_op_id_t parent,
+                                            loxbudget_op_id_t child,
+                                            loxbudget_trigger_kind_t kind);
+uint16_t loxbudget_causality_edge_count(const loxbudget_t* budget);
+#else
+typedef enum {
+  LOXBUDGET_TRIGGER_NEVER = 0,
+  LOXBUDGET_TRIGGER_RARE = 32,
+  LOXBUDGET_TRIGGER_MAYBE = 128,
+  LOXBUDGET_TRIGGER_ALWAYS = 255
+} loxbudget_trigger_kind_t;
+
+static inline loxbudget_status_t loxbudget_op_may_trigger(loxbudget_t* budget,
+                                                          loxbudget_op_id_t parent,
+                                                          loxbudget_op_id_t child,
+                                                          loxbudget_trigger_kind_t kind) {
+  (void)budget;
+  (void)parent;
+  (void)child;
+  (void)kind;
+  return LOXBUDGET_ERR_FEATURE_DISABLED;
+}
+static inline uint16_t loxbudget_causality_edge_count(const loxbudget_t* budget) {
+  (void)budget;
+  return 0u;
+}
+#endif
+
 #if LOXBUDGET_ENABLE_CALIBRATION
 loxbudget_status_t loxbudget_calibrate_begin(loxbudget_t* budget, loxbudget_op_id_t op,
                                              uint32_t target_samples);
@@ -388,6 +436,61 @@ loxbudget_status_t loxbudget_calibrate_sample(loxbudget_t* budget, loxbudget_op_
                                               const loxbudget_sample_t* sample);
 loxbudget_status_t loxbudget_calibrate_end(loxbudget_t* budget, loxbudget_op_id_t op,
                                            loxbudget_suggested_profile_t* out);
+
+/* Calibration export (V1.0 Phase 3).
+ *
+ * Binary format:
+ *   Header:  u8 version (=2), u8 record_count, u16 reserved(0)
+ *   Record:  u8 op_id, u8 flags(bit0=active), u16 reserved(0)
+ *            u16 ram_p50, u16 ram_p95, u16 ram_p99, u16 ram_max
+ *            u32 dur_p95_us, u32 dur_p99_us, u32 dur_max_us
+ *            u16 suggested_ram_limit, u16 outlier_count, u32 sample_count
+ *            u32 suggested_time_limit_us, u32 target_samples
+ *
+ * All integers are little-endian. Records are included only for ops with
+ * (sample_count > 0) or (active != 0).
+ */
+loxbudget_status_t loxbudget_calibration_export_size(const loxbudget_t* budget, size_t* out_size);
+loxbudget_status_t loxbudget_calibration_export(const loxbudget_t* budget, void* out,
+                                                size_t out_size, size_t* out_written);
+#else
+static inline loxbudget_status_t
+loxbudget_calibrate_begin(loxbudget_t* budget, loxbudget_op_id_t op, uint32_t target_samples) {
+  (void)budget;
+  (void)op;
+  (void)target_samples;
+  return LOXBUDGET_ERR_FEATURE_DISABLED;
+}
+static inline loxbudget_status_t loxbudget_calibrate_sample(loxbudget_t* budget,
+                                                            loxbudget_op_id_t op,
+                                                            const loxbudget_sample_t* sample) {
+  (void)budget;
+  (void)op;
+  (void)sample;
+  return LOXBUDGET_ERR_FEATURE_DISABLED;
+}
+static inline loxbudget_status_t loxbudget_calibrate_end(loxbudget_t* budget, loxbudget_op_id_t op,
+                                                         loxbudget_suggested_profile_t* out) {
+  (void)budget;
+  (void)op;
+  (void)out;
+  return LOXBUDGET_ERR_FEATURE_DISABLED;
+}
+static inline loxbudget_status_t loxbudget_calibration_export_size(const loxbudget_t* budget,
+                                                                   size_t* out_size) {
+  (void)budget;
+  (void)out_size;
+  return LOXBUDGET_ERR_FEATURE_DISABLED;
+}
+static inline loxbudget_status_t loxbudget_calibration_export(const loxbudget_t* budget, void* out,
+                                                              size_t out_size,
+                                                              size_t* out_written) {
+  (void)budget;
+  (void)out;
+  (void)out_size;
+  (void)out_written;
+  return LOXBUDGET_ERR_FEATURE_DISABLED;
+}
 #endif
 
 #if LOXBUDGET_ENABLE_AUDIT_TRAIL
@@ -422,6 +525,26 @@ static inline const char* loxbudget_status_name(loxbudget_status_t s) {
 }
 #endif
 
+/* Convenience operation profile helper.
+ *
+ * Initializes an op profile with:
+ * - `priority = LOXBUDGET_PRIO_NORMAL`
+ * - allow FULL under all pressure levels
+ * - `flags = 0`
+ */
+static inline loxbudget_op_profile_t loxbudget_op_profile_default(loxbudget_op_id_t op_id) {
+  loxbudget_op_profile_t p;
+  p.op_id = op_id;
+  p.priority = (uint8_t)LOXBUDGET_PRIO_NORMAL;
+  p.action_normal = (uint8_t)LOXBUDGET_ALLOW_FULL;
+  p.action_elevated = (uint8_t)LOXBUDGET_ALLOW_FULL;
+  p.action_critical = (uint8_t)LOXBUDGET_ALLOW_FULL;
+  p.action_survival = (uint8_t)LOXBUDGET_ALLOW_FULL;
+  p.action_lockdown = (uint8_t)LOXBUDGET_ALLOW_FULL;
+  p.flags = 0u;
+  return p;
+}
+
 /* HAL API (weak symbols provided in src/loxbudget_hal.c, overridable via callbacks). */
 /* Time since boot in milliseconds (monotonic). */
 uint32_t loxbudget_hal_now_ms(void);
@@ -434,6 +557,36 @@ loxbudget_bool_t loxbudget_hal_voltage_ok(void);
 loxbudget_bool_t loxbudget_hal_network_up(void);
 /* Convenience callback table for permissive defaults (tests/minimal example). */
 const loxbudget_hal_callbacks_t* loxbudget_hal_default_permissive(void);
+
+/* Convenience config/init helpers (for the common host/bare-metal case).
+ *
+ * Notes:
+ * - Uses `loxbudget_hal_default_permissive()` and `hal_strict=0` (fail-open).
+ * - Sets `audit_size=0` (audit disabled).
+ * - Sets `max_concurrent_leases=LOXBUDGET_MAX_LEASES` (matches `LOXBUDGET_REQUIRED_SIZE`).
+ */
+static inline loxbudget_config_t loxbudget_config_simple(uint8_t max_resources, uint8_t max_ops) {
+  loxbudget_config_t cfg;
+  cfg.max_resources = max_resources;
+  cfg.max_ops = max_ops;
+  cfg.max_concurrent_leases = (uint8_t)LOXBUDGET_MAX_LEASES;
+  cfg.audit_size = 0u;
+  cfg.hal_strict = 0u;
+  cfg._reserved[0] = 0u;
+  cfg._reserved[1] = 0u;
+  cfg._reserved[2] = 0u;
+  cfg.flags = 0u;
+  cfg.hal_callbacks = loxbudget_hal_default_permissive();
+  cfg.hal_user = NULL;
+  return cfg;
+}
+
+static inline loxbudget_status_t loxbudget_init_simple(loxbudget_t* budget, void* storage,
+                                                       size_t storage_size, uint8_t max_resources,
+                                                       uint8_t max_ops) {
+  loxbudget_config_t cfg = loxbudget_config_simple(max_resources, max_ops);
+  return loxbudget_init(budget, storage, storage_size, &cfg);
+}
 
 #ifdef __cplusplus
 } /* extern "C" */

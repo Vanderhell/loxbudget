@@ -3,7 +3,7 @@ set -e
 
 PROFILE=${1:-tiny}
 YAML=ci/footprint_budget.yaml
-OBJ=${2:-build/loxbudget_arm.o}
+OBJ=${2:-build/loxbudget_arm_${PROFILE}.o}
 
 TEXT_MAX=$(awk -v p="${PROFILE}:" '$1==p{f=1} f&&$1=="text_max:"{print $2; exit}' "$YAML")
 BSS_MAX=$(awk -v p="${PROFILE}:" '$1==p{f=1} f&&$1=="bss_max:"{print $2; exit}' "$YAML")

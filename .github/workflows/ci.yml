@@ -14,6 +14,14 @@ jobs:
       - run: make test
       - run: cmake -S . -B build_cmake && cmake --build build_cmake
       - run: ./build_cmake/test_microlog_adapter
+      - run: ./build_cmake/test_microhealth_adapter
+      - run: ./build_cmake/test_microconf_adapter
+      - run: ./build_cmake/test_microbus_adapter
+      - run: ./build_cmake/test_nvlog_adapter
+      - run: ./build_cmake/test_loxguard_adapter
+      - run: ./build_cmake/test_backward_compat_v0_3
+      - run: ./build_cmake/test_determinism
+      - run: ./build_cmake/test_calibration_disabled
       - run: make examples
       - run: wc -l < examples/01_bare_metal_minimal/main.c | awk '$1 > 50 { exit 1 }'
       - run: ./tools/footprint_check.sh
@@ -35,8 +43,12 @@ jobs:
       - run: sudo apt-get update
       - run: sudo apt-get install -y gcc-arm-none-eabi
       - run: chmod +x tools/footprint_check.sh
-      - run: make cross
-      - run: ./tools/footprint_check.sh tiny build/loxbudget_arm.o
+      - run: make cross-tiny
+      - run: ./tools/footprint_check.sh tiny
+      - run: make cross-standard
+      - run: ./tools/footprint_check.sh standard
+      - run: make cross-full
+      - run: ./tools/footprint_check.sh full
 
   format-check:
     runs-on: ubuntu-latest
@@ -44,7 +56,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update
       - run: sudo apt-get install -y clang-format
-      - run: clang-format --dry-run -Werror include/loxbudget.h src/loxbudget_core.c src/loxbudget_audit.c src/loxbudget_hal.c src/loxbudget_strings.c src/loxbudget_calibration.c tests/test_header_compiles.c tests/test_v0_1.c tests/test_microlog_adapter.c adapters/microlog/loxbudget_microlog_adapter.c adapters/microlog/loxbudget_microlog_adapter.h examples/01_bare_metal_minimal/main.c examples/02_freertos_mqtt_storm/main.c examples/03_esp_idf_flash_budget/main.c tests/integration/test_flash_burnout.c tests/integration/test_mqtt_storm.c tests/integration/test_ota_blocked.c
+      - run: clang-format --dry-run -Werror include/loxbudget.h src/loxbudget_core.c src/loxbudget_audit.c src/loxbudget_hal.c src/loxbudget_strings.c src/loxbudget_calibration.c tests/test_header_compiles.c tests/test_v0_1.c tests/test_backward_compat_v0_3.c tests/test_determinism.c tests/test_calibration_disabled.c tests/test_microlog_adapter.c tests/test_microhealth_adapter.c tests/test_microconf_adapter.c tests/test_microbus_adapter.c tests/test_nvlog_adapter.c tests/test_loxguard_adapter.c tests/single_header_impl.c adapters/microlog/loxbudget_microlog_adapter.c adapters/microlog/loxbudget_microlog_adapter.h adapters/microhealth/loxbudget_microhealth_adapter.c adapters/microhealth/loxbudget_microhealth_adapter.h adapters/microconf/loxbudget_microconf_adapter.c adapters/microconf/loxbudget_microconf_adapter.h adapters/microbus/loxbudget_microbus_adapter.c adapters/microbus/loxbudget_microbus_adapter.h adapters/nvlog/loxbudget_nvlog_adapter.c adapters/nvlog/loxbudget_nvlog_adapter.h adapters/loxguard/loxbudget_loxguard_adapter.c adapters/loxguard/loxbudget_loxguard_adapter.h examples/01_bare_metal_minimal/main.c examples/02_freertos_mqtt_storm/main.c examples/03_esp_idf_flash_budget/main.c tests/integration/test_flash_burnout.c tests/integration/test_mqtt_storm.c tests/integration/test_ota_blocked.c
 
   lint:
     runs-on: ubuntu-latest
@@ -53,7 +65,7 @@ jobs:
       - run: sudo apt-get update
       - run: sudo apt-get install -y clang-tidy clang
       - run: cmake -S . -B build_tidy -DCMAKE_C_COMPILER=clang -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-      - run: clang-tidy -p build_tidy include/loxbudget.h src/loxbudget_core.c src/loxbudget_audit.c src/loxbudget_hal.c src/loxbudget_strings.c src/loxbudget_calibration.c tests/test_header_compiles.c tests/test_v0_1.c tests/test_microlog_adapter.c adapters/microlog/loxbudget_microlog_adapter.c examples/01_bare_metal_minimal/main.c
+      - run: clang-tidy -p build_tidy include/loxbudget.h src/loxbudget_core.c src/loxbudget_audit.c src/loxbudget_hal.c src/loxbudget_strings.c src/loxbudget_calibration.c tests/test_header_compiles.c tests/test_v0_1.c tests/test_backward_compat_v0_3.c tests/test_determinism.c tests/test_calibration_disabled.c tests/test_microlog_adapter.c tests/test_microhealth_adapter.c tests/test_microconf_adapter.c tests/test_microbus_adapter.c tests/test_nvlog_adapter.c tests/test_loxguard_adapter.c tests/single_header_impl.c adapters/microlog/loxbudget_microlog_adapter.c adapters/microhealth/loxbudget_microhealth_adapter.c adapters/microconf/loxbudget_microconf_adapter.c adapters/microbus/loxbudget_microbus_adapter.c adapters/nvlog/loxbudget_nvlog_adapter.c adapters/loxguard/loxbudget_loxguard_adapter.c examples/01_bare_metal_minimal/main.c
 
   sanitizers:
     runs-on: ubuntu-latest
@@ -63,6 +75,18 @@ jobs:
       - run: sudo apt-get install -y clang
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
       - run: make CC=clang CFLAGS="-std=c99 -Wall -Wextra -Werror -Iinclude -fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g" LDFLAGS="-fsanitize=address,undefined" test
+
+  fuzz-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update
+      - run: sudo apt-get install -y clang
+      - run: mkdir -p build_fuzz
+      - run: clang -std=c99 -O1 -g -Iinclude -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer src/loxbudget_core.c src/loxbudget_audit.c src/loxbudget_hal.c src/loxbudget_strings.c src/loxbudget_calibration.c tests/fuzz/fuzz_decision_inputs.c -o build_fuzz/fuzz_decision_inputs
+      - run: ./build_fuzz/fuzz_decision_inputs -max_total_time=5
+      - run: clang -std=c99 -O1 -g -Iinclude -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION -DLOXBUDGET_ENABLE_RATE_WINDOWS=1 -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer src/loxbudget_core.c src/loxbudget_audit.c src/loxbudget_hal.c src/loxbudget_strings.c src/loxbudget_calibration.c tests/fuzz/fuzz_rate_windows.c -o build_fuzz/fuzz_rate_windows
+      - run: ./build_fuzz/fuzz_rate_windows -max_total_time=5
 
   audit-enabled:
     runs-on: ubuntu-latest
@@ -99,6 +123,19 @@ jobs:
       - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
       - run: make CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Werror -Iinclude -DLOXBUDGET_ENABLE_RATE_WINDOWS=1 -DLOXBUDGET_RATE_IMPL=2" test
 
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update
+      - run: sudo apt-get install -y lcov
+      - run: chmod +x tools/check_banned_symbols.sh tools/footprint_check.sh
+      - run: make clean
+      - run: make CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Werror -Iinclude -O0 -g --coverage" LDFLAGS="--coverage" test-adapters
+      - run: lcov --capture --directory build --output-file build/coverage.info
+      - run: lcov --remove build/coverage.info "/usr/*" --output-file build/coverage.info
+      - run: lcov --list build/coverage.info
+
   calibration-enabled:
     runs-on: ubuntu-latest
     steps:
@@ -111,4 +148,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 tools/amalgamate.py
-      - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header -DLOXBUDGET_IMPLEMENTATION -c single_header/loxbudget.h -o build/single_header.o
+      - run: mkdir -p build
+      - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header -c tests/single_header_impl.c -o build/loxbudget_single_header_impl.o
+      - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header tests/test_v0_1.c build/loxbudget_single_header_impl.o -o build/test_v0_1_single_header
+      - run: ./build/test_v0_1_single_header
+      - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header tests/test_backward_compat_v0_3.c build/loxbudget_single_header_impl.o -o build/test_backward_compat_v0_3_single_header
+      - run: ./build/test_backward_compat_v0_3_single_header
+      - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header tests/test_determinism.c build/loxbudget_single_header_impl.o -o build/test_determinism_single_header
+      - run: ./build/test_determinism_single_header
+      - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header tests/test_calibration_disabled.c build/loxbudget_single_header_impl.o -o build/test_calibration_disabled_single_header
+      - run: ./build/test_calibration_disabled_single_header
+      - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header -I./adapters/microlog tests/test_microlog_adapter.c adapters/microlog/loxbudget_microlog_adapter.c build/loxbudget_single_header_impl.o -o build/test_microlog_adapter_single_header
+      - run: ./build/test_microlog_adapter_single_header
+      - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header -I./adapters/microhealth tests/test_microhealth_adapter.c adapters/microhealth/loxbudget_microhealth_adapter.c build/loxbudget_single_header_impl.o -o build/test_microhealth_adapter_single_header
+      - run: ./build/test_microhealth_adapter_single_header
+      - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header -I./adapters/microconf tests/test_microconf_adapter.c adapters/microconf/loxbudget_microconf_adapter.c build/loxbudget_single_header_impl.o -o build/test_microconf_adapter_single_header
+      - run: ./build/test_microconf_adapter_single_header
+      - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header -I./adapters/microbus tests/test_microbus_adapter.c adapters/microbus/loxbudget_microbus_adapter.c build/loxbudget_single_header_impl.o -o build/test_microbus_adapter_single_header
+      - run: ./build/test_microbus_adapter_single_header
+      - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header -I./adapters/nvlog tests/test_nvlog_adapter.c adapters/nvlog/loxbudget_nvlog_adapter.c build/loxbudget_single_header_impl.o -o build/test_nvlog_adapter_single_header
+      - run: ./build/test_nvlog_adapter_single_header
+      - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header -I./adapters/loxguard tests/test_loxguard_adapter.c adapters/loxguard/loxbudget_loxguard_adapter.c build/loxbudget_single_header_impl.o -o build/test_loxguard_adapter_single_header
+      - run: ./build/test_loxguard_adapter_single_header

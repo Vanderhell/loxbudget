@@ -5,6 +5,14 @@
 #if LOXBUDGET_ENABLE_CALIBRATION
 
 typedef struct {
+  uint32_t magic2;
+  uint8_t res_cfg[LOXBUDGET_MAX_RESOURCES];
+  uint8_t op_cfg[LOXBUDGET_MAX_OPS];
+  uint8_t _pad[4];
+} lb__storage_hdr_t;
+LOXBUDGET_STATIC_ASSERT(sizeof(lb__storage_hdr_t) == 32, "storage header size (calib)");
+
+typedef struct {
   uint32_t marker_n[5];
   int32_t marker_n_prime_q16[5];
   uint32_t marker_q_q16[5];
@@ -26,6 +34,7 @@ typedef struct {
   lb__p2_estimator_t dur_p95;
   lb__p2_estimator_t dur_p99;
   uint16_t ram_max;
+  uint16_t ram_max_at_500;
   uint16_t outlier_count;
   uint32_t dur_max_us;
 } lb__calib_state_t;
@@ -50,6 +59,16 @@ static loxbudget_status_t lb__validate_budget_(const loxbudget_t* b) {
   if (b == NULL) return LOXBUDGET_ERR_INVALID_ARG;
   if (b->magic == 0u) return LOXBUDGET_ERR_NOT_INITIALIZED;
   return LOXBUDGET_OK;
+}
+
+static const lb__storage_hdr_t* lb__hdr_c_(const loxbudget_t* b) {
+  return (const lb__storage_hdr_t*)b->storage;
+}
+
+static loxbudget_bool_t lb__op_registered_(const loxbudget_t* b, loxbudget_op_id_t op) {
+  if (b == NULL || b->storage == NULL) return LOXBUDGET_FALSE;
+  if (op >= b->max_ops) return LOXBUDGET_FALSE;
+  return (lb__hdr_c_(b)->op_cfg[op] != 0u) ? LOXBUDGET_TRUE : LOXBUDGET_FALSE;
 }
 
 static void lb__sort5_u32_(uint32_t* a) {
@@ -208,6 +227,32 @@ static uint32_t lb__p2_get_q_q16_(const lb__p2_estimator_t* e) {
   return e->marker_q_q16[2];
 }
 
+static void lb__calib_compute_suggested_(const lb__calib_state_t* s,
+                                         loxbudget_suggested_profile_t* out) {
+  memset(out, 0, sizeof(*out));
+  out->ram_p50 = (uint16_t)(lb__p2_get_q_q16_(&s->ram_p50) >> 16);
+  out->ram_p95 = (uint16_t)(lb__p2_get_q_q16_(&s->ram_p95) >> 16);
+  out->ram_p99 = (uint16_t)(lb__p2_get_q_q16_(&s->ram_p99) >> 16);
+  out->ram_max = s->ram_max;
+  out->duration_p95_us = (lb__p2_get_q_q16_(&s->dur_p95) >> 16);
+  out->duration_p99_us = (lb__p2_get_q_q16_(&s->dur_p99) >> 16);
+  out->duration_max_us = s->dur_max_us;
+  out->outlier_count = s->outlier_count;
+  out->sample_count = s->sample_count;
+
+  /* Suggested limits (SPEC.md §14, integer-only). */
+  {
+    const uint16_t p99_plus = (uint16_t)(out->ram_p99 + 32u);
+    const uint16_t max_plus5pct = (uint16_t)(((uint32_t)out->ram_max * 105u) / 100u);
+    out->suggested_ram_limit = (p99_plus > max_plus5pct) ? p99_plus : max_plus5pct;
+  }
+  {
+    const uint32_t p99_plus = out->duration_p99_us + 500u;
+    const uint32_t max_plus10pct = (out->duration_max_us * 110u) / 100u;
+    out->suggested_time_limit_us = (p99_plus > max_plus10pct) ? p99_plus : max_plus10pct;
+  }
+}
+
 loxbudget_status_t loxbudget_calibrate_begin(loxbudget_t* budget, loxbudget_op_id_t op,
                                              uint32_t target_samples) {
   loxbudget_status_t st = lb__validate_budget_(budget);
@@ -215,6 +260,7 @@ loxbudget_status_t loxbudget_calibrate_begin(loxbudget_t* budget, loxbudget_op_i
   if (target_samples == 0u) return LOXBUDGET_ERR_INVALID_ARG;
   if (budget->calib_off == 0u) return LOXBUDGET_ERR_NO_SPACE;
   if (op >= budget->max_ops) return LOXBUDGET_ERR_INVALID_ARG;
+  if (lb__op_registered_(budget, op) == LOXBUDGET_FALSE) return LOXBUDGET_ERR_NOT_FOUND;
 
   lb__calib_state_slot_t* slot = &lb__calib_slots_(budget)[op];
   lb__calib_state_t* s = &slot->s;
@@ -240,6 +286,7 @@ loxbudget_status_t loxbudget_calibrate_sample(loxbudget_t* budget, loxbudget_op_
   }
   if (budget->calib_off == 0u) return LOXBUDGET_ERR_NO_SPACE;
   if (op >= budget->max_ops) return LOXBUDGET_ERR_INVALID_ARG;
+  if (lb__op_registered_(budget, op) == LOXBUDGET_FALSE) return LOXBUDGET_ERR_NOT_FOUND;
   lb__calib_state_t* s = &lb__calib_slots_(budget)[op].s;
   if (s->active == 0u || s->op_id != op) return LOXBUDGET_ERR_BAD_STATE;
 
@@ -247,25 +294,30 @@ loxbudget_status_t loxbudget_calibrate_sample(loxbudget_t* budget, loxbudget_op_
   if (sample->ram_used > s->ram_max) s->ram_max = sample->ram_used;
   if (sample->duration_us > s->dur_max_us) s->dur_max_us = sample->duration_us;
 
+  /* Capture a stable baseline after the first 500 samples (SPEC.md §14). */
+  if (s->sample_count == 500u) { s->ram_max_at_500 = s->ram_max; }
+
   lb__p2_add_sample_(&s->ram_p50, 0x8000u, (uint32_t)sample->ram_used);
   lb__p2_add_sample_(&s->ram_p95, 0xF333u, (uint32_t)sample->ram_used);
   lb__p2_add_sample_(&s->ram_p99, 0xFD70u, (uint32_t)sample->ram_used);
 
-  if (s->sample_count == 500u) {
-    s->outlier_count = 0u;
-    /* reuse outlier_count slot to store max@500? keep simple */
-  }
-
-  /* outlier detection: sample > p99 * 1.5 */
+  /* Outlier detection (SPEC.md §14):
+   *   sample > p99 * 1.5
+   *   OR (after sample 500) sample > max_at_500 * 1.2
+   */
   {
     const uint32_t p99 = lb__p2_get_q_q16_(&s->ram_p99);
-    if (((uint64_t)sample->ram_used << 16) > (uint64_t)p99 + (p99 >> 1)) { s->outlier_count++; }
+    const uint64_t x_q16 = (uint64_t)sample->ram_used << 16;
+    if (x_q16 > (uint64_t)p99 + (p99 >> 1)) {
+      s->outlier_count++;
+    } else if (s->sample_count > 500u && s->ram_max_at_500 != 0u) {
+      const uint32_t thr = (uint32_t)(((uint32_t)s->ram_max_at_500 * 12u) / 10u);
+      if (sample->ram_used > thr) { s->outlier_count++; }
+    }
   }
 
-  /* Duration estimator expects <= 65535 range; saturate for V1.0 minimal impl. */
-  const uint32_t dur_sat = (sample->duration_us > 65535u) ? 65535u : sample->duration_us;
-  lb__p2_add_sample_(&s->dur_p95, 0xF333u, dur_sat);
-  lb__p2_add_sample_(&s->dur_p99, 0xFD70u, dur_sat);
+  lb__p2_add_sample_(&s->dur_p95, 0xF333u, sample->duration_us);
+  lb__p2_add_sample_(&s->dur_p99, 0xFD70u, sample->duration_us);
 
   return LOXBUDGET_OK;
 }
@@ -276,33 +328,111 @@ loxbudget_status_t loxbudget_calibrate_end(loxbudget_t* budget, loxbudget_op_id_
   if (st != LOXBUDGET_OK || out == NULL) { return (out == NULL) ? LOXBUDGET_ERR_INVALID_ARG : st; }
   if (budget->calib_off == 0u) return LOXBUDGET_ERR_NO_SPACE;
   if (op >= budget->max_ops) return LOXBUDGET_ERR_INVALID_ARG;
+  if (lb__op_registered_(budget, op) == LOXBUDGET_FALSE) return LOXBUDGET_ERR_NOT_FOUND;
   lb__calib_state_t* s = &lb__calib_slots_(budget)[op].s;
   if (s->active == 0u || s->op_id != op) return LOXBUDGET_ERR_BAD_STATE;
 
-  memset(out, 0, sizeof(*out));
-  out->ram_p50 = (uint16_t)(lb__p2_get_q_q16_(&s->ram_p50) >> 16);
-  out->ram_p95 = (uint16_t)(lb__p2_get_q_q16_(&s->ram_p95) >> 16);
-  out->ram_p99 = (uint16_t)(lb__p2_get_q_q16_(&s->ram_p99) >> 16);
-  out->ram_max = s->ram_max;
-  out->duration_p95_us = (lb__p2_get_q_q16_(&s->dur_p95) >> 16);
-  out->duration_p99_us = (lb__p2_get_q_q16_(&s->dur_p99) >> 16);
-  out->duration_max_us = s->dur_max_us;
-  out->outlier_count = s->outlier_count;
-  out->sample_count = s->sample_count;
-
-  /* Suggested limits (conservative, integer-only). */
-  {
-    uint16_t ram_suggest = out->ram_p99 + 32u;
-    if (ram_suggest < out->ram_max) ram_suggest = out->ram_max;
-    out->suggested_ram_limit = ram_suggest;
-  }
-  {
-    uint32_t time_suggest = out->duration_p99_us + 1000u;
-    if (time_suggest < out->duration_max_us) time_suggest = out->duration_max_us;
-    out->suggested_time_limit_us = time_suggest;
-  }
+  lb__calib_compute_suggested_(s, out);
 
   s->active = 0u;
+  return LOXBUDGET_OK;
+}
+
+static void lb__write_u16_le_(uint8_t* p, uint16_t v) {
+  p[0] = (uint8_t)(v & 0xFFu);
+  p[1] = (uint8_t)((v >> 8) & 0xFFu);
+}
+
+static void lb__write_u32_le_(uint8_t* p, uint32_t v) {
+  p[0] = (uint8_t)(v & 0xFFu);
+  p[1] = (uint8_t)((v >> 8) & 0xFFu);
+  p[2] = (uint8_t)((v >> 16) & 0xFFu);
+  p[3] = (uint8_t)((v >> 24) & 0xFFu);
+}
+
+loxbudget_status_t loxbudget_calibration_export_size(const loxbudget_t* budget, size_t* out_size) {
+  loxbudget_status_t st = lb__validate_budget_(budget);
+  if (st != LOXBUDGET_OK || out_size == NULL) {
+    return (out_size == NULL) ? LOXBUDGET_ERR_INVALID_ARG : st;
+  }
+  if (budget->calib_off == 0u) return LOXBUDGET_ERR_NO_SPACE;
+
+  const lb__calib_state_slot_t* slots = lb__calib_slots_c_(budget);
+  uint32_t rec_count = 0u;
+  for (uint32_t op = 0; op < budget->max_ops; op++) {
+    const lb__calib_state_t* s = &slots[op].s;
+    if (s->sample_count != 0u || s->active != 0u) { rec_count++; }
+  }
+
+  /* header(4) + records(rec_count * 40) */
+  *out_size = 4u + (size_t)rec_count * 40u;
+  return LOXBUDGET_OK;
+}
+
+loxbudget_status_t loxbudget_calibration_export(const loxbudget_t* budget, void* out,
+                                                size_t out_size, size_t* out_written) {
+  loxbudget_status_t st = lb__validate_budget_(budget);
+  if (st != LOXBUDGET_OK || out == NULL || out_written == NULL) {
+    if (out == NULL || out_written == NULL) return LOXBUDGET_ERR_INVALID_ARG;
+    return st;
+  }
+  if (budget->calib_off == 0u) return LOXBUDGET_ERR_NO_SPACE;
+
+  size_t need = 0u;
+  st = loxbudget_calibration_export_size(budget, &need);
+  if (st != LOXBUDGET_OK) return st;
+  if (out_size < need) return LOXBUDGET_ERR_NO_SPACE;
+
+  uint8_t* p = (uint8_t*)out;
+
+  const lb__calib_state_slot_t* slots = lb__calib_slots_c_(budget);
+  uint32_t rec_count = 0u;
+  for (uint32_t op = 0; op < budget->max_ops; op++) {
+    const lb__calib_state_t* s = &slots[op].s;
+    if (s->sample_count != 0u || s->active != 0u) { rec_count++; }
+  }
+
+  /* Header */
+  p[0] = 2u; /* version */
+  p[1] = (uint8_t)rec_count;
+  p[2] = 0u;
+  p[3] = 0u;
+  size_t off = 4u;
+
+  for (uint32_t op = 0; op < budget->max_ops; op++) {
+    const lb__calib_state_t* s = &slots[op].s;
+    if (s->sample_count == 0u && s->active == 0u) continue;
+
+    loxbudget_suggested_profile_t sugg;
+    lb__calib_compute_suggested_(s, &sugg);
+
+    uint8_t flags = 0u;
+    if (s->active != 0u) flags |= 1u;
+
+    /* Record (40 bytes) */
+    p[off + 0u] = (uint8_t)op;
+    p[off + 1u] = flags;
+    lb__write_u16_le_(&p[off + 2u], 0u);
+
+    lb__write_u16_le_(&p[off + 4u], sugg.ram_p50);
+    lb__write_u16_le_(&p[off + 6u], sugg.ram_p95);
+    lb__write_u16_le_(&p[off + 8u], sugg.ram_p99);
+    lb__write_u16_le_(&p[off + 10u], sugg.ram_max);
+
+    lb__write_u32_le_(&p[off + 12u], sugg.duration_p95_us);
+    lb__write_u32_le_(&p[off + 16u], sugg.duration_p99_us);
+    lb__write_u32_le_(&p[off + 20u], sugg.duration_max_us);
+
+    lb__write_u16_le_(&p[off + 24u], sugg.suggested_ram_limit);
+    lb__write_u16_le_(&p[off + 26u], sugg.outlier_count);
+    lb__write_u32_le_(&p[off + 28u], sugg.sample_count);
+    lb__write_u32_le_(&p[off + 32u], sugg.suggested_time_limit_us);
+    lb__write_u32_le_(&p[off + 36u], s->target_samples);
+
+    off += 40u;
+  }
+
+  *out_written = off;
   return LOXBUDGET_OK;
 }
 

@@ -1,6 +1,8 @@
-#loxbudget
+# loxbudget
 
 Tiny no-heap C99 library for embedded firmware: pre-flight checks for embedded operations.
+
+![CI](https://github.com/Vanderhell/loxbuget/actions/workflows/ci.yml/badge.svg)
 
 ## Features
 
@@ -10,6 +12,7 @@ Tiny no-heap C99 library for embedded firmware: pre-flight checks for embedded o
 - Optional diagnostic strings (`LOXBUDGET_ENABLE_DIAGNOSTIC_STRINGS`).
 - Optional rate windows + lifetime limits (`LOXBUDGET_ENABLE_RATE_WINDOWS`).
 - Optional calibration (`LOXBUDGET_ENABLE_CALIBRATION`).
+- API stability: the public API declared in `include/loxbudget.h` is intended to be stable starting with `v1.0.0` (semver).
 
 ## Quick start
 
@@ -17,26 +20,13 @@ Tiny no-heap C99 library for embedded firmware: pre-flight checks for embedded o
 #include "loxbudget.h"
 
 int main(void) {
-  static uint8_t storage[LOXBUDGET_REQUIRED_SIZE(2, 2, 0)];
+  static uint32_t storage[(LOXBUDGET_REQUIRED_SIZE(2, 2, 0) + 3u) / 4u];
   loxbudget_t b;
-  loxbudget_config_t cfg = {0};
-  cfg.max_resources = 2;
-  cfg.max_ops = 2;
-  cfg.max_concurrent_leases = 2;
-  cfg.hal_strict = 0;
-  cfg.hal_callbacks = loxbudget_hal_default_permissive();
 
-  loxbudget_op_profile_t p = {0,
-                              LOXBUDGET_PRIO_NORMAL,
-                              LOXBUDGET_ALLOW_FULL,
-                              LOXBUDGET_ALLOW_FULL,
-                              LOXBUDGET_ALLOW_FULL,
-                              LOXBUDGET_ALLOW_FULL,
-                              LOXBUDGET_ALLOW_FULL,
-                              0};
+  loxbudget_op_profile_t p = loxbudget_op_profile_default(0);
   loxbudget_decision_t d;
 
-  if (loxbudget_init(&b, storage, sizeof(storage), &cfg) != LOXBUDGET_OK) return 2;
+  if (loxbudget_init_simple(&b, storage, sizeof(storage), 2, 2) != LOXBUDGET_OK) return 2;
   (void)loxbudget_set_resource(&b, 0, 10, LOXBUDGET_RES_REUSABLE);
   (void)loxbudget_register_op(&b, &p);
   (void)loxbudget_op_set_need(&b, 0, 0, 5);
@@ -46,3 +36,11 @@ int main(void) {
 ```
 
 This initializes a budget instance into caller-provided storage, declares one reusable resource, registers an operation profile, and asks the library for a deterministic decision before running the operation.
+
+## Docs
+
+- `docs/index.md`
+
+## Contributing
+
+See `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.

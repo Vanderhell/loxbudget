@@ -1,4 +1,9 @@
 tiny:
   text_max: 4096
   bss_max: 0
-
+standard:
+  text_max: 8192
+  bss_max: 0
+full:
+  text_max: 12288
+  bss_max: 0

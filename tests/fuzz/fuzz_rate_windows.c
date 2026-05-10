@@ -16,7 +16,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   (void)size;
   return 0;
 #else
-  static uint8_t storage[LOXBUDGET_REQUIRED_SIZE(4, 8, 0)];
+  static uint32_t storage[(LOXBUDGET_REQUIRED_SIZE(4, 8, 0) + 3u) / 4u];
   uint32_t t = 0;
   loxbudget_hal_callbacks_t hal = *loxbudget_hal_default_permissive();
   loxbudget_t b;
@@ -67,4 +67,3 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
 }
 
 #endif
-
