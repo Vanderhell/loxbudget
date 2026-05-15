@@ -39,7 +39,43 @@ This initializes a budget instance into caller-provided storage, declares one re
 
 ## Docs
 
-- `docs/index.md`
+- Main index: `docs/index.md`
+- Getting started: `docs/getting_started.md`
+- Handoff/release notes: `docs/handoff.md`
+
+## Build And Verify
+
+```sh
+make test
+cmake -S . -B build && cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+## Install And Consume With CMake
+
+Install locally:
+
+```sh
+cmake -S . -B build
+cmake --build build
+cmake --install build --prefix ./dist
+```
+
+Consume from another CMake project:
+
+```cmake
+find_package(loxbudget CONFIG REQUIRED)
+target_link_libraries(your_target PRIVATE loxbudget::loxbudget)
+```
+
+## Repository Layout
+
+- `include/` public API
+- `src/` library implementation
+- `adapters/` optional integrations
+- `tests/` host and integration coverage
+- `examples/` minimal and scenario-oriented demos
+- `tools/` utility scripts for amalgamation, calibration and checks
 
 ## Contributing
 

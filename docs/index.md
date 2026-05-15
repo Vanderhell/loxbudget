@@ -12,3 +12,4 @@ This folder contains user-facing documentation for `loxbudget`.
 - [Causality](causality.md) — optional cascade-cost tracking (planned for V1.1)
 - [FAQ](faq.md) — common questions
 - [Design rationale](design_rationale.md) — short rationale and invariants
+- [Handoff](handoff.md) — verification and release checklist
