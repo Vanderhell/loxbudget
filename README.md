@@ -2,7 +2,18 @@
 
 Tiny no-heap C99 library for embedded firmware: pre-flight checks for embedded operations.
 
-![CI](https://github.com/Vanderhell/loxbuget/actions/workflows/ci.yml/badge.svg)
+[![CI](https://github.com/Vanderhell/loxbuget/actions/workflows/ci.yml/badge.svg)](https://github.com/Vanderhell/loxbuget/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Vanderhell/loxbuget?display_name=tag)](https://github.com/Vanderhell/loxbuget/releases)
+[![License](https://img.shields.io/github/license/Vanderhell/loxbuget)](LICENSE)
+[![Language](https://img.shields.io/badge/language-C99-blue.svg)](include/loxbudget.h)
+[![Platform](https://img.shields.io/badge/platform-embedded%20firmware-0a7ea4.svg)](docs/porting.md)
+[![Single Header](https://img.shields.io/badge/distribution-single--header-success)](tools/amalgamate.py)
+[![CMake](https://img.shields.io/badge/build-CMake-informational)](CMakeLists.txt)
+[![No Heap](https://img.shields.io/badge/heap-none-critical)](SPEC.md)
+[![No Floats](https://img.shields.io/badge/floats-none-critical)](SPEC.md)
+[![API Status](https://img.shields.io/badge/api-v1.0.0%20rc1-orange)](releases/v1.0.0-rc1.md)
+[![Security](https://img.shields.io/badge/security-policy-brightgreen)](SECURITY.md)
+[![Coverage](https://img.shields.io/badge/coverage-CI%20tracked-blueviolet)](.github/workflows/ci.yml)
 
 ## Why loxbudget exists
 
