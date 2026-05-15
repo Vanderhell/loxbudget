@@ -12,6 +12,7 @@ static uint32_t demo_now_ms(void* user) {
 
 static const loxbudget_hal_callbacks_t* demo_hal_(uint32_t* t) {
   static loxbudget_hal_callbacks_t cb;
+  (void)t;
   cb.now_ms = &demo_now_ms;
   cb.critical_enter = 0;
   cb.critical_exit = 0;

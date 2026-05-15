@@ -141,7 +141,6 @@ static uint32_t lb__p2_parabolic_(const lb__p2_estimator_t* e, uint32_t i, int d
   const int64_t qip1 = (int64_t)e->marker_q_q16[i + 1u];
 
   const int32_t d_i = (int32_t)d;
-  const int32_t n_i_d = n_i + d_i;
 
   /* term1 = (n_i - n_im1 + d) * (qip1 - qi) / (n_ip1 - n_i) */
   const int64_t term1_num = (int64_t)(n_i - n_im1 + d_i) * (qip1 - qi);

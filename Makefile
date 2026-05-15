@@ -98,12 +98,12 @@ format:
 lint:
 	@echo "lint is implemented in CI via clang-tidy"
 
-example:
+example: $(BUILD_DIR)/libloxbudget.a
 	@$(CC) $(CFLAGS) $(LDFLAGS) -Iinclude examples/01_bare_metal_minimal/main.c \
 		$(BUILD_DIR)/libloxbudget.a -o $(BUILD_DIR)/example_minimal
 	@$(BUILD_DIR)/example_minimal
 
-examples: example
+examples: example $(BUILD_DIR)/libloxbudget.a
 	@$(CC) $(CFLAGS) $(LDFLAGS) -Iinclude examples/02_freertos_mqtt_storm/main.c \
 		$(BUILD_DIR)/libloxbudget.a -o $(BUILD_DIR)/example_02
 	@$(CC) $(CFLAGS) $(LDFLAGS) -Iinclude examples/03_esp_idf_flash_budget/main.c \

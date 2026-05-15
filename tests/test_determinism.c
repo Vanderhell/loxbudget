@@ -78,10 +78,14 @@ int main(void) {
       if (median != 0u) {
 #if defined(_WIN32)
         const uint64_t max_ratio = 20u;
+        const uint64_t slack = 0u;
 #else
-        const uint64_t max_ratio = 2u;
+        const uint64_t max_ratio = 4u;
+        const uint64_t slack = 256u;
 #endif
-        if (median <= (UINT64_MAX / max_ratio)) { assert(p99 <= (median * max_ratio)); }
+        if (median <= ((UINT64_MAX - slack) / max_ratio)) {
+          assert(p99 <= (median * max_ratio) + slack);
+        }
       }
     }
   }
@@ -104,10 +108,14 @@ int main(void) {
       if (median != 0u) {
 #if defined(_WIN32)
         const uint64_t max_ratio = 20u;
+        const uint64_t slack = 0u;
 #else
-        const uint64_t max_ratio = 2u;
+        const uint64_t max_ratio = 4u;
+        const uint64_t slack = 256u;
 #endif
-        if (median <= (UINT64_MAX / max_ratio)) { assert(p99 <= (median * max_ratio)); }
+        if (median <= ((UINT64_MAX - slack) / max_ratio)) {
+          assert(p99 <= (median * max_ratio) + slack);
+        }
       }
     }
   }

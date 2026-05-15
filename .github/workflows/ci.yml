@@ -133,7 +133,7 @@ jobs:
       - run: make clean
       - run: make CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Werror -Iinclude -O0 -g --coverage" LDFLAGS="--coverage" test-adapters
       - run: lcov --capture --directory build --output-file build/coverage.info
-      - run: lcov --remove build/coverage.info "/usr/*" --output-file build/coverage.info
+      - run: lcov --ignore-errors unused --remove build/coverage.info "/usr/*" --output-file build/coverage.info
       - run: lcov --list build/coverage.info
 
   calibration-enabled:
