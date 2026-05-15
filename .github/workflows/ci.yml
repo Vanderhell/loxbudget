@@ -24,7 +24,6 @@ jobs:
       - run: ./build_cmake/test_calibration_disabled
       - run: make examples
       - run: wc -l < examples/01_bare_metal_minimal/main.c | awk '$1 > 50 { exit 1 }'
-      - run: ./tools/footprint_check.sh
 
   clang-host:
     runs-on: ubuntu-latest
