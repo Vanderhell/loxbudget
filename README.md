@@ -2,9 +2,9 @@
 
 Tiny no-heap C99 library for embedded firmware: pre-flight checks for embedded operations.
 
-[![CI](https://github.com/Vanderhell/loxbuget/actions/workflows/ci.yml/badge.svg)](https://github.com/Vanderhell/loxbuget/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Vanderhell/loxbuget?display_name=tag)](https://github.com/Vanderhell/loxbuget/releases)
-[![License](https://img.shields.io/github/license/Vanderhell/loxbuget)](LICENSE)
+[![CI](https://github.com/Vanderhell/loxbudget/actions/workflows/ci.yml/badge.svg)](https://github.com/Vanderhell/loxbudget/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Vanderhell/loxbudget?display_name=tag)](https://github.com/Vanderhell/loxbudget/releases)
+[![License](https://img.shields.io/github/license/Vanderhell/loxbudget)](LICENSE)
 [![Language](https://img.shields.io/badge/language-C99-blue.svg)](include/loxbudget.h)
 [![Platform](https://img.shields.io/badge/platform-embedded%20firmware-0a7ea4.svg)](docs/porting.md)
 [![Single Header](https://img.shields.io/badge/distribution-single--header-success)](tools/amalgamate.py)

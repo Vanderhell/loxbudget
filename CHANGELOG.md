@@ -6,12 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Post-release roadmap for the `v1.1.0` development cycle.
+
 ### Changed
 
 - Tightened CI and release-handoff documentation for downstream consumers.
 - Added CMake install/export support and `ctest` registration for packaged verification.
 
-## [1.0.0-rc1] - 2026-05-15
+## [1.0.0] - 2026-05-15
+
+### Added
+
+- Stable public C API for deterministic admission control in embedded firmware.
+- Host-side calibration export and reporting workflow.
+- Optional adapters for microlog, microhealth, microconf, microbus, nvlog, and loxguard.
+- Generated single-header distribution with CI validation against core and adapter tests.
+- CMake install/export support for downstream consumers.
+- Expanded CI coverage across GCC, Clang, sanitizers, fuzz smoke, cross-compilation, coverage, and footprint checks.
+
+### Changed
+
+- Release-facing documentation, policy files, and workflow dependencies were tightened for the first stable release.
+
+## [1.0.0-rc1] - 2026-05-10
 
 ### Added
 
