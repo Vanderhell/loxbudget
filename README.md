@@ -4,6 +4,12 @@ Tiny no-heap C99 library for embedded firmware: pre-flight checks for embedded o
 
 ![CI](https://github.com/Vanderhell/loxbuget/actions/workflows/ci.yml/badge.svg)
 
+## Why loxbudget exists
+
+Embedded firmware often fails because operations are allowed to run even when the system is already under resource pressure.
+
+`loxbudget` provides a deterministic pre-flight gate before risky work: MQTT publish, OTA update, flash write, log burst, debug dump, parser run, queue allocation, or any operation that must be degraded, delayed, rejected, or allowed under pressure.
+
 ## Features
 
 - Deterministic `check/enter/leave` decisions for operation profiles under pressure.
@@ -13,6 +19,24 @@ Tiny no-heap C99 library for embedded firmware: pre-flight checks for embedded o
 - Optional rate windows + lifetime limits (`LOXBUDGET_ENABLE_RATE_WINDOWS`).
 - Optional calibration (`LOXBUDGET_ENABLE_CALIBRATION`).
 - API stability: the public API declared in `include/loxbudget.h` is intended to be stable starting with `v1.0.0` (semver).
+
+## Typical use cases
+
+- Prevent MQTT storms from exhausting queue slots.
+- Block OTA when voltage or flash budget is unsafe.
+- Degrade logging under memory pressure.
+- Reject non-critical work during survival mode.
+- Enforce flash-write lifetime budgets.
+
+## What this is not
+
+`loxbudget` is not a scheduler, allocator, watchdog, logger, profiler, or RTOS replacement. It is a deterministic admission-control layer for deciding whether an operation may run now.
+
+## Release status
+
+Current release: `v1.0.0-rc1`
+
+The public API is intended to be stable for `v1.0.0`. The RC period is for integration feedback, documentation cleanup, and platform validation. No feature expansion is planned before `v1.0.0`.
 
 ## Quick start
 
@@ -42,6 +66,8 @@ This initializes a budget instance into caller-provided storage, declares one re
 - Main index: `docs/index.md`
 - Getting started: `docs/getting_started.md`
 - Handoff/release notes: `docs/handoff.md`
+- Release notes: `releases/v1.0.0-rc1.md`, `releases/v1.0.0.md`
+- Roadmap: `ROADMAP.md`
 
 ## Build And Verify
 
@@ -67,6 +93,21 @@ Consume from another CMake project:
 find_package(loxbudget CONFIG REQUIRED)
 target_link_libraries(your_target PRIVATE loxbudget::loxbudget)
 ```
+
+## Verification status
+
+| Area | Status |
+|---|---|
+| GCC host build | verified in CI |
+| Clang host build | verified in CI |
+| ARM Cortex-M0 cross-build | verified in CI |
+| clang-format | enforced |
+| clang-tidy | enforced |
+| ASan/UBSan | verified |
+| fuzz smoke | verified |
+| single-header build | verified |
+| CMake install/export | verified |
+| footprint budget | checked |
 
 ## Repository Layout
 

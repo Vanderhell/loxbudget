@@ -13,3 +13,4 @@ This folder contains user-facing documentation for `loxbudget`.
 - [FAQ](faq.md) — common questions
 - [Design rationale](design_rationale.md) — short rationale and invariants
 - [Handoff](handoff.md) — verification and release checklist
+- [Roadmap](../ROADMAP.md) — release and post-release roadmap
