@@ -134,6 +134,12 @@ jobs:
       - run: lcov --capture --directory build --output-file build/coverage.info
       - run: lcov --ignore-errors unused --remove build/coverage.info "/usr/*" --output-file build/coverage.info
       - run: lcov --list build/coverage.info
+      - uses: codecov/codecov-action@v5
+        with:
+          files: build/coverage.info
+          fail_ci_if_error: true
+          flags: unit
+          name: lcov
 
   calibration-enabled:
     runs-on: ubuntu-latest
@@ -169,3 +175,12 @@ jobs:
       - run: ./build/test_nvlog_adapter_single_header
       - run: gcc -std=c99 -Wall -Wextra -Werror -I./single_header -I./adapters/loxguard tests/test_loxguard_adapter.c adapters/loxguard/loxbudget_loxguard_adapter.c build/loxbudget_single_header_impl.o -o build/test_loxguard_adapter_single_header
       - run: ./build/test_loxguard_adapter_single_header
+
+  cppcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update
+      - run: sudo apt-get install -y cppcheck
+      - run: cppcheck --version
+      - run: cppcheck --std=c99 --enable=warning,style,performance,portability --error-exitcode=1 -Iinclude include src

@@ -1,5 +1,7 @@
 build/
 build_*/
+dist/
+dist_*/
 single_header/
 *.o
 *.obj

@@ -1,8 +1,16 @@
 ## Summary
 
+- What does this change do?
+
 ## Checklist
 
-- [ ] Builds and tests pass locally (`make test`)
-- [ ] CI is green
-- [ ] Public API changes are intentional (or avoided)
-- [ ] Docs updated (if needed)
+- [ ] Tests added/updated (or N/A)
+- [ ] `make test` passes
+- [ ] No heap / no floats / `.bss = 0` preserved (if applicable)
+- [ ] Footprint impact considered (if applicable)
+- [ ] Docs/README updated (if applicable)
+
+## Notes for reviewers
+
+- Anything risky or worth extra attention?
+

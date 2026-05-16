@@ -95,7 +95,7 @@ static void apply_cfg_() {
 
 static void print_status_() {
   Serial.printf("loxbudget ESP32 demo status:\n");
-  Serial.printf("- mode: %s\n", (g_mode == MODE_IDLE) ? "idle" : (g_mode == MODE_RUN_ONCE) ? "run_once" : "soak");
+  Serial.printf("- mode: %s\n", (g_mode == MODE_IDLE) ? "idle" : (g_mode == MODE_RUN) ? "run" : "soak");
   Serial.printf("- need: %u\n", (unsigned)g_need);
   Serial.printf("- limit: %u\n", (unsigned)g_limit);
 #if LOXBUDGET_ENABLE_RATE_WINDOWS

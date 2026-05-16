@@ -1,26 +1,26 @@
 name: Bug report
-description: Report a problem with loxbudget
+description: Report a functional bug or regression
 labels: ["bug"]
 body:
   - type: textarea
-    id: summary
+    id: what_happened
     attributes:
-      label: Summary
-      description: What happened? What did you expect?
+      label: What happened?
+      description: Include expected vs actual behavior.
     validations:
       required: true
   - type: textarea
     id: repro
     attributes:
-      label: Repro steps / code
-      description: Minimal steps or a small snippet to reproduce.
-      render: c
+      label: Minimal repro
+      description: Code snippet or steps to reproduce.
     validations:
-      required: false
+      required: true
   - type: textarea
-    id: environment
+    id: env
     attributes:
       label: Environment
-      description: Toolchain, OS, target, and build flags.
+      description: MCU/RTOS/toolchain/flags, commit/tag, and how you integrated.
     validations:
       required: false
+

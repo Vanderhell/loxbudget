@@ -4,34 +4,20 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
-  github-release:
+  build-assets:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
-
-      - name: Build single-header artifact
-        run: python3 tools/amalgamate.py
-
-      - name: Pick release notes
-        id: notes
-        shell: bash
-        run: |
-          NOTES="releases/${GITHUB_REF_NAME}.md"
-          if [ -f "$NOTES" ]; then
-            echo "notes_path=$NOTES" >> "$GITHUB_OUTPUT"
-          else
-            echo "notes_path=" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+      - run: python3 tools/amalgamate.py
+      - run: cp single_header/loxbudget.h loxbudget.h
+      - run: sha256sum loxbudget.h > SHA256SUMS
+      - uses: softprops/action-gh-release@v2
         with:
-          body_path: ${{ steps.notes.outputs.notes_path }}
           files: |
-            single_header/loxbudget.h
+            loxbudget.h
+            SHA256SUMS
+

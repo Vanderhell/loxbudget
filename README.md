@@ -13,7 +13,7 @@ Tiny no-heap C99 library for embedded firmware: pre-flight checks for embedded o
 [![No Floats](https://img.shields.io/badge/floats-none-critical)](SPEC.md)
 [![API Status](https://img.shields.io/badge/api-v1.0.0%20rc1-orange)](releases/v1.0.0-rc1.md)
 [![Security](https://img.shields.io/badge/security-policy-brightgreen)](SECURITY.md)
-[![Coverage](https://img.shields.io/badge/coverage-CI%20tracked-blueviolet)](.github/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/Vanderhell/loxbudget/graph/badge.svg)](https://codecov.io/gh/Vanderhell/loxbudget)
 
 ## Why loxbudget exists
 
@@ -42,6 +42,16 @@ Embedded firmware often fails because operations are allowed to run even when th
 ## What this is not
 
 `loxbudget` is not a scheduler, allocator, watchdog, logger, profiler, or RTOS replacement. It is a deterministic admission-control layer for deciding whether an operation may run now.
+
+## Alternatives (and why not)
+
+Evaluators almost always ask "why not X?". This table is the short, practical answer.
+
+| Alternative | Good for | Where it breaks down | Why `loxbudget` exists anyway |
+|---|---|---|---|
+| Token bucket / leaky bucket | Smooth-rate limiting a *single* flow (API calls, publishes) | Hard to model **multiple** resources (RAM/queue slots/flash budget), **pressure modes**, and **enter/leave** lifetimes; typically doesn't explain *why* a decision happened | `loxbudget` gates operations against multiple resource types + pressure state, with deterministic decisions and (optional) audit trail |
+| Ad-hoc `if (...) return;` | Tiny one-off guardrails | Drifts into inconsistent rules, hidden coupling, and untestable edge cases; hard to enforce "no heap / no globals / bounded work" across a codebase | Centralizes policy in one library + test suite + CI gates (banned symbols, footprint budgets, sanitizers) |
+| FreeRTOS resource handling (queues/semaphores/mutexes) | Concurrency control and backpressure within a subsystem | It answers “can I take this resource now?”, not “should I start this expensive operation under global pressure?”; no cross-cutting policy across subsystems | `loxbudget` is an **admission controller** you call *before* starting work, independent of the RTOS primitive you use underneath |
 
 ## Release status
 
@@ -76,6 +86,7 @@ This initializes a budget instance into caller-provided storage, declares one re
 
 - Main index: `docs/index.md`
 - Getting started: `docs/getting_started.md`
+- MISRA notes: `docs/misra.md`
 - Handoff/release notes: `docs/handoff.md`
 - Release notes: `releases/v1.0.0-rc1.md`, `releases/v1.0.0.md`
 - Roadmap: `ROADMAP.md`
@@ -119,6 +130,43 @@ target_link_libraries(your_target PRIVATE loxbudget::loxbudget)
 | single-header build | verified |
 | CMake install/export | verified |
 | footprint budget | checked |
+
+## Benchmarks (measured numbers)
+
+Embedded claims like "deterministic" need numbers. The library keeps `.bss = 0` (no global mutable state) by design; user storage lives in your `storage[]` buffer.
+
+### At-a-glance table (MCU)
+
+| Platform | Toolchain | `.text` | `.bss` | `loxbudget_check()` WCET | Stack peak (`check()`) |
+|---|---|---:|---:|---:|---:|
+| Cortex-M0 | `arm-none-eabi-gcc -Os` | 4192 B (standard, causality off) | 0 B | TBD (needs on-target timer; M0 has no `DWT->CYCCNT`) | TBD |
+| Cortex-M4 | `arm-none-eabi-gcc -Os` | TBD | 0 B | TBD | TBD |
+
+### Footprint (Cortex-M0, `-Os`, freestanding)
+
+Measured with `arm-none-eabi-size` on a relocatable linked object (`arm-none-eabi-ld -r`). See `benchmarks/v1.1_footprint.md` for the exact methodology and toolchain versions.
+
+| Build | `.text` | `.data` | `.bss` | Notes |
+|---|---:|---:|---:|---|
+| Standard profile (`LOXBUDGET_ENABLE_CAUSALITY=0`) | 4192 B | 0 B | 0 B | `build/loxbudget_arm_standard.o` |
+| Standard profile (`LOXBUDGET_ENABLE_CAUSALITY=1`) | 5340 B | 0 B | 0 B | +1148 B `.text` vs baseline |
+
+### CPU time (host microbenchmark)
+
+Host microbenchmarks are **not** MCU cycle counts, but they are good for catching accidental complexity regressions. See `benchmarks/v1.1_cycles.md`.
+
+| Scenario | Result |
+|---|---:|
+| `loxbudget_check()` baseline (no causality) | 260.7 ns/check |
+| `loxbudget_check()` with causality (2 edges) | 338.8 ns/check |
+| Overhead | ~1.30× |
+
+### MCU cycle counts + stack usage
+
+Target-cycle and stack-peak measurement:
+
+- ESP32 (real hardware): `examples/esp32_arduino_loxbudget/` prints min/max/avg latency in a tight-loop stress pass.
+- Cortex-M (real hardware): use a cycle counter (`DWT->CYCCNT` on M3/M4/M7) or a hardware timer on M0/M0+. See `benchmarks/cortexm_wcet_stack/`.
 
 ## Repository Layout
 
