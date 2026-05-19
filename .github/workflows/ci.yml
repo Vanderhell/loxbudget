@@ -191,4 +191,4 @@ jobs:
       - run: sudo apt-get update
       - run: sudo apt-get install -y cppcheck
       - run: cppcheck --version
-      - run: cppcheck --std=c99 --enable=warning,style,performance,portability --error-exitcode=1 -Iinclude include src
+      - run: cppcheck --inline-suppr --std=c99 --enable=warning,style,performance,portability --error-exitcode=1 -Iinclude include src
