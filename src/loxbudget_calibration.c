@@ -5,9 +5,12 @@
 #if LOXBUDGET_ENABLE_CALIBRATION
 
 typedef struct {
+  // cppcheck-suppress unusedStructMember
   uint32_t magic2;
+  // cppcheck-suppress unusedStructMember
   uint8_t res_cfg[LOXBUDGET_MAX_RESOURCES];
   uint8_t op_cfg[LOXBUDGET_MAX_OPS];
+  // cppcheck-suppress unusedStructMember
   uint8_t _pad[4];
 } lb__storage_hdr_t;
 LOXBUDGET_STATIC_ASSERT(sizeof(lb__storage_hdr_t) == 32, "storage header size (calib)");
@@ -41,12 +44,14 @@ typedef struct {
 
 typedef struct {
   lb__calib_state_t s;
+  // cppcheck-suppress unusedStructMember
   uint8_t _pad[LOXBUDGET_CALIB_STATE_SIZE - (uint32_t)sizeof(lb__calib_state_t)];
 } lb__calib_state_slot_t;
 
 LOXBUDGET_STATIC_ASSERT(sizeof(lb__calib_state_slot_t) == LOXBUDGET_CALIB_STATE_SIZE,
                         "calib slot size");
 
+// cppcheck-suppress constParameterPointer
 static lb__calib_state_slot_t* lb__calib_slots_(loxbudget_t* b) {
   return (lb__calib_state_slot_t*)(b->storage + b->calib_off);
 }

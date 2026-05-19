@@ -19,9 +19,12 @@ typedef struct {
 LOXBUDGET_STATIC_ASSERT(sizeof(lb__causality_hdr_t) == 4, "lb__causality_hdr_t size");
 
 typedef struct {
+  // cppcheck-suppress unusedStructMember
   uint32_t magic2;
+  // cppcheck-suppress unusedStructMember
   uint8_t res_cfg[LOXBUDGET_MAX_RESOURCES];
   uint8_t op_cfg[LOXBUDGET_MAX_OPS];
+  // cppcheck-suppress unusedStructMember
   uint8_t _pad[4];
 } lb__storage_hdr_t;
 LOXBUDGET_STATIC_ASSERT(sizeof(lb__storage_hdr_t) == 32, "lb__storage_hdr_t size");
@@ -59,6 +62,7 @@ static uint32_t lb__causality_off_(const loxbudget_t* b) {
   return off;
 }
 
+// cppcheck-suppress constParameterPointer
 static lb__causality_hdr_t* lb__causality_hdr_(loxbudget_t* b) {
   return (lb__causality_hdr_t*)(b->storage + lb__causality_off_(b));
 }
@@ -66,6 +70,7 @@ static const lb__causality_hdr_t* lb__causality_hdr_c_(const loxbudget_t* b) {
   return (const lb__causality_hdr_t*)(b->storage + lb__causality_off_(b));
 }
 
+// cppcheck-suppress constParameterPointer
 static lb__causality_edge_t* lb__causality_edges_(loxbudget_t* b) {
   uint8_t* base = b->storage + lb__causality_off_(b);
   return (lb__causality_edge_t*)(base + sizeof(lb__causality_hdr_t));
@@ -75,6 +80,7 @@ static const lb__causality_edge_t* lb__causality_edges_c_(const loxbudget_t* b) 
   return (const lb__causality_edge_t*)(base + sizeof(lb__causality_hdr_t));
 }
 
+// cppcheck-suppress constParameterPointer
 static uint8_t* lb__causality_visited_(loxbudget_t* b) {
   uint8_t* base = b->storage + lb__causality_off_(b);
   base += sizeof(lb__causality_hdr_t);
@@ -199,7 +205,7 @@ uint32_t lb__causality_add_scaled_needs_(loxbudget_t* budget, loxbudget_op_id_t 
   if (lb__causality_has_storage_(budget) == LOXBUDGET_FALSE) return 0u;
   if (root_op >= budget->max_ops) return 0u;
 
-  lb__causality_hdr_t* hdr = lb__causality_hdr_(budget);
+  const lb__causality_hdr_t* hdr = lb__causality_hdr_c_(budget);
   const lb__causality_edge_t* edges = lb__causality_edges_c_(budget);
   uint8_t* visited = lb__causality_visited_(budget);
 

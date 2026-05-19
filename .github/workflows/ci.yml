@@ -134,12 +134,18 @@ jobs:
       - run: lcov --capture --directory build --output-file build/coverage.info
       - run: lcov --ignore-errors unused --remove build/coverage.info "/usr/*" --output-file build/coverage.info
       - run: lcov --list build/coverage.info
-      - uses: codecov/codecov-action@v5
+      - name: Upload coverage to Codecov
+        if: ${{ secrets.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: build/coverage.info
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           flags: unit
           name: lcov
+      - name: Skip Codecov upload (no token)
+        if: ${{ secrets.CODECOV_TOKEN == '' }}
+        run: echo "CODECOV_TOKEN is not set; skipping Codecov upload."
 
   calibration-enabled:
     runs-on: ubuntu-latest

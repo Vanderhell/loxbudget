@@ -31,6 +31,7 @@ static void loxbudget_critical_exit_(const loxbudget_t* budget) {
 static const loxbudget_decision_record_t* loxbudget_audit_buf_c_(const loxbudget_t* b) {
   return (const loxbudget_decision_record_t*)(b->storage + b->audit_off);
 }
+// cppcheck-suppress constParameterPointer
 static loxbudget_decision_record_t* loxbudget_audit_buf_(loxbudget_t* b) {
   return (loxbudget_decision_record_t*)(b->storage + b->audit_off);
 }

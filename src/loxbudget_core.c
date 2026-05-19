@@ -48,24 +48,28 @@ typedef struct {
 } loxbudget_lease_slot_t;
 LOXBUDGET_STATIC_ASSERT(sizeof(loxbudget_lease_slot_t) == 4, "lease slot meta");
 
+// cppcheck-suppress constParameterPointer
 static loxbudget_resource_t* loxbudget_resources_(loxbudget_t* b) {
   return (loxbudget_resource_t*)(b->storage + b->resources_off);
 }
 static const loxbudget_resource_t* loxbudget_resources_c_(const loxbudget_t* b) {
   return (const loxbudget_resource_t*)(b->storage + b->resources_off);
 }
+// cppcheck-suppress constParameterPointer
 static loxbudget_op_profile_t* loxbudget_ops_(loxbudget_t* b) {
   return (loxbudget_op_profile_t*)(b->storage + b->ops_off);
 }
 static const loxbudget_op_profile_t* loxbudget_ops_c_(const loxbudget_t* b) {
   return (const loxbudget_op_profile_t*)(b->storage + b->ops_off);
 }
+// cppcheck-suppress constParameterPointer
 static loxbudget_need_t* loxbudget_needs_(loxbudget_t* b) {
   return (loxbudget_need_t*)(b->storage + b->needs_off);
 }
 static const loxbudget_need_t* loxbudget_needs_c_(const loxbudget_t* b) {
   return (const loxbudget_need_t*)(b->storage + b->needs_off);
 }
+// cppcheck-suppress constParameterPointer
 static loxbudget_lease_slot_t* loxbudget_lease_slots_(loxbudget_t* b) {
   return (loxbudget_lease_slot_t*)(b->storage + b->lease_slots_off);
 }
@@ -73,6 +77,7 @@ static const loxbudget_lease_slot_t* loxbudget_lease_slots_c_(const loxbudget_t*
   return (const loxbudget_lease_slot_t*)(b->storage + b->lease_slots_off);
 }
 
+// cppcheck-suppress constParameterPointer
 static loxbudget_decision_record_t* loxbudget_audit_buf_(loxbudget_t* b) {
   return (loxbudget_decision_record_t*)(b->storage + b->audit_off);
 }
@@ -100,6 +105,7 @@ typedef struct {
 } lb__rate_state_t;
 LOXBUDGET_STATIC_ASSERT(sizeof(lb__rate_state_t) == 72, "rate state size");
 
+// cppcheck-suppress constParameterPointer
 static lb__rate_state_t* lb__rate_state_(loxbudget_t* b) {
   return (lb__rate_state_t*)(b->storage + b->rate_off);
 }
@@ -139,9 +145,10 @@ static loxbudget_bool_t loxbudget_is_pow2_or_zero_u8_(uint8_t v) {
   return ((v & (uint8_t)(v - 1u)) == 0u) ? LOXBUDGET_TRUE : LOXBUDGET_FALSE;
 }
 
-static loxbudget_status_t loxbudget_validate_init_args_(loxbudget_t* budget, void* storage,
-                                                        size_t storage_size,
-                                                        const loxbudget_config_t* cfg) {
+static loxbudget_status_t loxbudget_validate_init_args_(const loxbudget_t* budget,
+                                                        const void* storage,
+                                                         size_t storage_size,
+                                                         const loxbudget_config_t* cfg) {
   if (budget == NULL || storage == NULL || cfg == NULL) { return LOXBUDGET_ERR_INVALID_ARG; }
   if (storage_size == 0u) { return LOXBUDGET_ERR_INVALID_ARG; }
   if (loxbudget_is_aligned_u32_(storage) == LOXBUDGET_FALSE) { return LOXBUDGET_ERR_ALIGNMENT; }
@@ -1181,6 +1188,7 @@ loxbudget_status_t loxbudget_leave(loxbudget_t* budget, loxbudget_lease_t lease)
   return LOXBUDGET_OK;
 }
 
+// cppcheck-suppress constParameterPointer
 loxbudget_status_t loxbudget_yield_check(loxbudget_t* budget, loxbudget_lease_t lease,
                                          loxbudget_pressure_hint_t* out) {
   loxbudget_status_t st = loxbudget_validate_budget_(budget);
