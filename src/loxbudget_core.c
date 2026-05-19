@@ -145,11 +145,10 @@ static loxbudget_bool_t loxbudget_is_pow2_or_zero_u8_(uint8_t v) {
   return ((v & (uint8_t)(v - 1u)) == 0u) ? LOXBUDGET_TRUE : LOXBUDGET_FALSE;
 }
 
-static loxbudget_status_t loxbudget_validate_init_args_(
-    const loxbudget_t* budget,
-    const void* storage,
-    size_t storage_size,
-    const loxbudget_config_t* cfg) {
+static loxbudget_status_t loxbudget_validate_init_args_(const loxbudget_t* budget,
+                                                       const void* storage,
+                                                       size_t storage_size,
+                                                       const loxbudget_config_t* cfg) {
   if (budget == NULL || storage == NULL || cfg == NULL) { return LOXBUDGET_ERR_INVALID_ARG; }
   if (storage_size == 0u) { return LOXBUDGET_ERR_INVALID_ARG; }
   if (loxbudget_is_aligned_u32_(storage) == LOXBUDGET_FALSE) { return LOXBUDGET_ERR_ALIGNMENT; }
