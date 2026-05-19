@@ -124,6 +124,8 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - uses: actions/checkout@v5
       - run: sudo apt-get update
@@ -135,7 +137,7 @@ jobs:
       - run: lcov --ignore-errors unused --remove build/coverage.info "/usr/*" --output-file build/coverage.info
       - run: lcov --list build/coverage.info
       - name: Upload coverage to Codecov
-        if: ${{ secrets.CODECOV_TOKEN != '' }}
+        if: ${{ env.CODECOV_TOKEN != '' }}
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -144,7 +146,7 @@ jobs:
           flags: unit
           name: lcov
       - name: Skip Codecov upload (no token)
-        if: ${{ secrets.CODECOV_TOKEN == '' }}
+        if: ${{ env.CODECOV_TOKEN == '' }}
         run: echo "CODECOV_TOKEN is not set; skipping Codecov upload."
 
   calibration-enabled:
